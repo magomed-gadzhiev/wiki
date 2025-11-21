@@ -72,6 +72,14 @@ class ArticlePermission(permissions.BasePermission):
         
         # Проверка прав на просмотр
         if request.method in permissions.SAFE_METHODS:
+            # Получаем группы пользователя
+            user_groups = self._get_user_groups(request.user)
+            
+            # Если пользователь не состоит ни в одной группе
+            if not user_groups.exists():
+                # Показываем только статьи с индивидуальными правами
+                return request.user in obj.can_view.all()
+            
             # Если есть права через группы
             if category_permission == 'full':
                 return True
@@ -79,15 +87,13 @@ class ArticlePermission(permissions.BasePermission):
                 # При праве только на чтение видим только опубликованные статьи
                 return obj.is_published
             elif category_permission == 'none':
-                # Нет доступа через группы
-                pass
+                # Нет доступа через группы на эту категорию
+                # Проверяем индивидуальные права
+                return request.user in obj.can_view.all()
             else:
-                # Нет прав через группы, проверяем старую систему прав
-                if obj.is_published:
-                    return True
-                if request.user in obj.can_view.all():
-                    return True
-            return False
+                # Нет прав через группы на категорию (статья без категории или категория без прав)
+                # Показываем только если есть индивидуальные права
+                return request.user in obj.can_view.all()
         
         # Проверка прав на редактирование
         if request.method in ['PUT', 'PATCH']:

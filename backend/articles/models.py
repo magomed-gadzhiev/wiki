@@ -113,6 +113,8 @@ class Article(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлено')
     is_published = models.BooleanField(default=False, verbose_name='Опубликовано')
     view_count = models.IntegerField(default=0, verbose_name='Просмотры')
+    is_deleted = models.BooleanField(default=False, verbose_name='Удалено')
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='Дата удаления')
     
     # Права доступа
     can_view = models.ManyToManyField(User, related_name='viewable_articles', blank=True, verbose_name='Могут просматривать')

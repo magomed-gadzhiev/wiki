@@ -82,6 +82,15 @@ export class AuthService {
     );
   }
 
+  checkAuth(): Observable<User> {
+    return this.http.get<User>(`${this.apiUrl}/me/`).pipe(
+      tap(user => {
+        this.currentUserSubject.next(user);
+        localStorage.setItem('user', JSON.stringify(user));
+      })
+    );
+  }
+
   private setUser(user: User, tokens: { access: string; refresh: string }): void {
     localStorage.setItem('access_token', tokens.access);
     localStorage.setItem('refresh_token', tokens.refresh);

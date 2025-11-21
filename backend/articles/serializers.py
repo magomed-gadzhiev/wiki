@@ -26,8 +26,42 @@ class SectionSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
     
     def get_categories(self, obj):
-        """Возвращает список категорий раздела"""
-        categories = obj.categories.all().order_by('sort_order', 'name')
+        """Возвращает список категорий раздела, на которые у пользователя есть доступ"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return []
+        
+        user = request.user
+        
+        # Суперпользователи видят все категории
+        if user.is_superuser:
+            categories = obj.categories.all().order_by('sort_order', 'name')
+            return CategorySimpleSerializer(categories, many=True).data
+        
+        # Получаем все группы пользователя
+        user_groups = user.article_groups.all()
+        
+        if not user_groups.exists():
+            # Если пользователь не в группах, не показываем категории
+            return []
+        
+        # Получаем права групп на категории (read или full)
+        from .models import CategoryPermission
+        category_permissions = CategoryPermission.objects.filter(
+            group__in=user_groups,
+            permission_level__in=['read', 'full'],
+            category__section=obj
+        ).values_list('category_id', flat=True).distinct()
+        
+        if not category_permissions:
+            # Нет категорий с доступом в этом разделе
+            return []
+        
+        # Фильтруем категории по правам доступа
+        categories = obj.categories.filter(
+            id__in=category_permissions
+        ).order_by('sort_order', 'name')
+        
         return CategorySimpleSerializer(categories, many=True).data
 
 
@@ -198,9 +232,10 @@ class ArticleSerializer(serializers.ModelSerializer):
             'can_view', 'can_edit', 'can_delete',
             'can_view_ids', 'can_edit_ids', 'can_delete_ids',
             'images', 'option_values', 'option_values_data',
-            'versions_count', 'latest_version'
+            'versions_count', 'latest_version',
+            'is_deleted', 'deleted_at'
         ]
-        read_only_fields = ['id', 'author', 'created_at', 'updated_at', 'view_count']
+        read_only_fields = ['id', 'author', 'created_at', 'updated_at', 'view_count', 'is_deleted', 'deleted_at']
     
     def get_latest_version(self, obj):
         latest = obj.versions.first()

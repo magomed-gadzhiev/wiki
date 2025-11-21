@@ -770,6 +770,17 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           const layoutStyles = canvasDoc.createElement('style');
           layoutStyles.id = 'gjs-layout-styles';
           layoutStyles.textContent = `
+            /* Переопределение стилей body для корректного отображения в редакторе */
+            body {
+              width: 100% !important;
+              max-width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              box-sizing: border-box !important;
+            }
+            * {
+              box-sizing: border-box;
+            }
             /* Стили для layout блоков только в редакторе */
             .container,
             .container-fluid {
@@ -2543,26 +2554,120 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   onWordFileSelected(event: any): void {
     const file = event.target.files[0];
     if (file) {
+      // Импортируем файл сразу без модального окна
       this.articleService.importWord(file).subscribe({
         next: (response) => {
-          // Заменяем контент на импортированный
-          this.articleForm.patchValue({
-            content: response.content
-          });
-          
-          // Загружаем контент в редактор
+          // Добавляем контент в редактор как есть
           if (this.editor) {
-            this.loadContentToEditor(response.content);
+            this.addContentToEditor(response.content);
+          } else {
+            this.error = 'Редактор не инициализирован. Попробуйте позже.';
           }
-          
-          // Сбрасываем input для возможности повторного выбора того же файла
-          event.target.value = '';
         },
         error: (err) => {
           this.error = err.error?.error || 'Ошибка импорта файла';
-          event.target.value = '';
         }
       });
+      
+      // Сбрасываем input для возможности повторного выбора того же файла
+      event.target.value = '';
+    }
+  }
+
+  addContentToEditor(content: string): void {
+    if (!this.editor) {
+      setTimeout(() => this.addContentToEditor(content), 100);
+      return;
+    }
+
+    // Проверяем, что редактор полностью готов
+    if (!this.editor.addComponents || typeof this.editor.addComponents !== 'function') {
+      setTimeout(() => this.addContentToEditor(content), 100);
+      return;
+    }
+
+    try {
+      // Извлекаем HTML (без стилей для компонентов)
+      const htmlMatch = content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').trim();
+      
+      if (!htmlMatch) {
+        this.error = 'Импортированный контент пуст';
+        return;
+      }
+
+      // Добавляем компоненты к существующему контенту как есть, без оберток
+      this.editor.addComponents(htmlMatch);
+      
+      // Обрабатываем стили (добавляем к существующим)
+      const styleMatch = content.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+      if (styleMatch && styleMatch[1]) {
+        const cssText = styleMatch[1].trim();
+        if (cssText) {
+          setTimeout(() => {
+            try {
+              // Получаем существующие стили
+              const existingCss = this.editor.getCss ? this.editor.getCss() : '';
+              
+              // Объединяем стили (без дополнительных стилей для группы)
+              const combinedCss = existingCss + '\n' + cssText;
+              
+              // Устанавливаем объединенные стили
+              if (this.editor.setCss && typeof this.editor.setCss === 'function') {
+                this.editor.setCss(combinedCss);
+              } else if (this.editor.Css && this.editor.Css.set && typeof this.editor.Css.set === 'function') {
+                this.editor.Css.set(combinedCss);
+              }
+              
+              // Также добавляем стили в canvas напрямую для отображения
+              const canvas = this.editor?.Canvas;
+              if (canvas) {
+                const frameEl = canvas.getFrameEl();
+                if (frameEl && frameEl.contentDocument) {
+                  const doc = frameEl.contentDocument;
+                  let styleEl = doc.getElementById('gjs-editor-styles');
+                  if (!styleEl) {
+                    styleEl = doc.createElement('style');
+                    styleEl.id = 'gjs-editor-styles';
+                    doc.head.appendChild(styleEl);
+                  }
+                  
+                  // Добавляем стили для body, чтобы предотвратить сужение при импорте
+                  const bodyOverrideStyles = `
+                    /* Переопределение стилей body для корректного отображения в редакторе */
+                    body {
+                      width: 100% !important;
+                      max-width: 100% !important;
+                      margin: 0 !important;
+                      padding: 0 !important;
+                      box-sizing: border-box !important;
+                    }
+                    * {
+                      box-sizing: border-box;
+                    }
+                  `;
+                  
+                  styleEl.textContent = bodyOverrideStyles + '\n' + combinedCss;
+                  
+                  // Также применяем стили напрямую к body, если он существует
+                  const bodyEl = doc.body;
+                  if (bodyEl) {
+                    bodyEl.style.width = '100%';
+                    bodyEl.style.maxWidth = '100%';
+                    bodyEl.style.margin = '0';
+                    bodyEl.style.padding = '0';
+                    bodyEl.style.boxSizing = 'border-box';
+                  }
+                }
+              }
+            } catch (cssError) {
+              console.warn('Не удалось добавить CSS стили:', cssError);
+            }
+          }, 200);
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка добавления контента в редактор:', error);
+      this.error = 'Ошибка добавления импортированного контента в редактор';
     }
   }
 

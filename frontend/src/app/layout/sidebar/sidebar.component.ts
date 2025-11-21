@@ -314,12 +314,20 @@ export class SidebarComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadSections();
-    this.loadCategoriesWithoutSection();
+    // Загружаем категории только если пользователь авторизован
+    if (this.isAuthenticated()) {
+      this.loadSections();
+      this.loadCategoriesWithoutSection();
+    }
     this.checkCurrentCategory();
   }
 
   loadSections(): void {
+    // Загружаем секции только если пользователь авторизован
+    if (!this.isAuthenticated()) {
+      return;
+    }
+    
     this.articleService.getSections().subscribe({
       next: (sections) => {
         this.sections = sections;
@@ -340,6 +348,11 @@ export class SidebarComponent implements OnInit {
   }
 
   loadCategoriesWithoutSection(): void {
+    // Загружаем категории только если пользователь авторизован
+    if (!this.isAuthenticated()) {
+      return;
+    }
+    
     this.articleService.getCategories().subscribe({
       next: (categories) => {
         // Фильтруем категории без раздела

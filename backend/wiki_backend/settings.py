@@ -152,12 +152,16 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Session settings
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30  # 30 дней в секундах
+SESSION_SAVE_EVERY_REQUEST = True  # Обновлять время жизни сессии при каждом запросе
+
 # JWT Settings
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),  # Увеличено до 24 часов
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # Увеличено до 30 дней
     'ROTATE_REFRESH_TOKENS': True,
 }
 
