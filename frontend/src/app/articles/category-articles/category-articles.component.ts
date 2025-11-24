@@ -314,8 +314,8 @@ export class CategoryArticlesComponent implements OnInit {
       next: (categories) => {
         this.category = categories.find(c => c.id === this.categoryId) || null;
       },
-      error: (err) => {
-        console.error('Ошибка загрузки категории:', err);
+      error: () => {
+        // Ошибка загрузки категории
       }
     });
   }
@@ -344,8 +344,7 @@ export class CategoryArticlesComponent implements OnInit {
         this.articles = response.results;
         this.loading = false;
       },
-      error: (err) => {
-        console.error('Ошибка загрузки статей:', err);
+      error: () => {
         this.loading = false;
       }
     });

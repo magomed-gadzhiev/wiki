@@ -395,14 +395,12 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       next: (categories) => {
         // Убеждаемся, что categories - это массив
         this.categories = Array.isArray(categories) ? categories : [];
-        console.log('Загружены категории:', this.categories);
         
         // Если это создание новой статьи и указана категория в URL
         if (!this.isEditMode && categoryId) {
           const category = this.categories.find(c => c.id === categoryId);
           if (category) {
             this.articleForm.patchValue({ category_id: categoryId });
-            console.log('Установлена категория из URL:', categoryId);
           }
         }
         
@@ -413,8 +411,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           this.loadArticle(id);
         }
       },
-      error: (err) => {
-        console.error('Ошибка загрузки категорий:', err);
+      error: () => {
         this.categories = []; // Устанавливаем пустой массив при ошибке
         // Все равно загружаем статью, даже если категории не загрузились
         this.loadTags();
@@ -430,8 +427,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       next: (tags) => {
         this.tags = Array.isArray(tags) ? tags : [];
       },
-      error: (err) => {
-        console.error('Ошибка загрузки тегов:', err);
+      error: () => {
         this.tags = [];
       }
     });
@@ -442,8 +438,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       next: (options) => {
         this.options = Array.isArray(options) ? options : [];
       },
-      error: (err) => {
-        console.error('Ошибка загрузки опций:', err);
+      error: () => {
         this.options = [];
       }
     });
@@ -525,8 +520,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           });
           this.showTagSuggestions = this.tagSuggestions.length > 0;
         },
-        error: (err) => {
-          console.error('Ошибка поиска тегов:', err);
+        error: () => {
           this.tagSuggestions = [];
           this.showTagSuggestions = false;
         }
@@ -704,7 +698,6 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     // Проверяем, что элемент существует в DOM
     const containerElement = document.getElementById('gjs-editor');
     if (!containerElement) {
-      console.error('Контейнер #gjs-editor не найден в DOM');
       setTimeout(() => this.initStudioEditor(), 100);
       return;
     }
@@ -714,7 +707,6 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       const gjs = (grapesjs as any).default || grapesjs;
       
       if (!gjs || typeof gjs.init !== 'function') {
-        console.error('GrapesJS не инициализирован или недоступен');
         this.error = 'Ошибка загрузки редактора. GrapesJS недоступен.';
         return;
       }
@@ -761,7 +753,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           });
         }
       } catch (pluginError: any) {
-        console.warn('Плагин grapesjs-table несовместим с текущей версией GrapesJS:', pluginError);
+        // Плагин grapesjs-table несовместим с текущей версией GrapesJS
       }
       */
 
@@ -919,7 +911,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
                     bootstrapCss = rules.map(rule => rule.cssText).join('\n');
                   }
                 } catch (e) {
-                  console.warn('Не удалось получить Bootstrap CSS из styleSheets:', e);
+                  // Не удалось получить Bootstrap CSS из styleSheets
                 }
                 
                 // Если не удалось получить из styleSheets, используем CDN
@@ -933,8 +925,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
                       // Добавляем стили layout после загрузки Bootstrap CSS
                       addLayoutStyles(canvas.contentDocument!);
                     })
-                    .catch(err => {
-                      console.warn('Не удалось загрузить Bootstrap CSS из CDN:', err);
+                    .catch(() => {
                       // Fallback: добавляем link на CDN
                       const link = canvas.contentDocument!.createElement('link');
                       link.rel = 'stylesheet';
@@ -960,7 +951,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
               }
             }
           } catch (error) {
-            console.warn('Ошибка при добавлении Bootstrap CSS:', error);
+            // Ошибка при добавлении Bootstrap CSS
           }
         }, 300);
 
@@ -1000,7 +991,6 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
                           });
                         },
                         error: (err) => {
-                          console.error('Ошибка загрузки изображения:', err);
                           this.error = 'Ошибка загрузки изображения';
                           reject(err);
                         }
@@ -1013,7 +1003,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
               }
             }
           } catch (error) {
-            console.warn('Не удалось настроить Asset Manager:', error);
+            // Не удалось настроить Asset Manager
           }
         }, 200);
 
@@ -1026,7 +1016,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
               const content = `<style>${css}</style>${html}`;
               this.articleForm.patchValue({ content }, { emitEvent: false });
             } catch (error) {
-              console.error('Ошибка синхронизации контента:', error);
+              // Ошибка синхронизации контента
             }
           }
         };
@@ -1053,7 +1043,6 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           }, 500);
         }
     } catch (error) {
-      console.error('Ошибка инициализации GrapesJS редактора:', error);
       this.error = 'Ошибка загрузки редактора. Попробуйте обновить страницу.';
     }
   }
@@ -2270,7 +2259,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
             }
           });
         } catch (e) {
-          console.warn('Не удалось обработать ID компонентов:', e);
+          // Не удалось обработать ID компонентов
         }
       }, 300);
       
@@ -2305,18 +2294,17 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
                 }
               }
             } catch (cssError) {
-              console.warn('Не удалось установить CSS стили:', cssError);
+              // Не удалось установить CSS стили
             }
           }, 200);
         }
       }
     } catch (error) {
-      console.error('Ошибка загрузки контента в редактор:', error);
       // Fallback: просто устанавливаем HTML
       try {
         this.editor.setComponents(content);
       } catch (fallbackError) {
-        console.error('Ошибка при fallback загрузке:', fallbackError);
+        // Ошибка при fallback загрузке
       }
     }
   }
@@ -2324,10 +2312,6 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   loadArticle(id: string): void {
     this.articleService.getArticle(id).subscribe({
       next: (article) => {
-        console.log('Загружена статья:', article);
-        console.log('Категория статьи:', article.category);
-        console.log('ID категории:', article.category?.id);
-        console.log('Загруженные категории:', this.categories);
         
         // Устанавливаем значения формы
         const categoryId = article.category?.id || null;
@@ -2372,14 +2356,10 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
             if (categoryId && this.categories.length > 0) {
               // Проверяем, что категория существует в списке
               const categoryExists = this.categories.some(cat => String(cat.id) === String(categoryId));
-              console.log('Категория найдена в списке:', categoryExists);
               
               if (categoryExists) {
                 control.setValue(categoryId, { emitEvent: false });
-                console.log('Установлено значение category_id:', categoryId);
-                console.log('Текущее значение формы:', control.value);
               } else {
-                console.warn('Категория статьи не найдена в списке категорий');
                 control.setValue(null, { emitEvent: false });
               }
             } else {
@@ -2403,7 +2383,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         const content = `<style>${css}</style>${html}`;
         this.articleForm.patchValue({ content });
       } catch (error) {
-        console.error('Ошибка получения контента из редактора:', error);
+        // Ошибка получения контента из редактора
       }
     }
 
@@ -2465,7 +2445,6 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         this.saveArticle();
       },
       error: (err) => {
-        console.error('Ошибка создания тегов:', err);
         this.error = err.error?.error || 'Ошибка создания тегов';
         this.saving = false;
       }
@@ -2660,13 +2639,12 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
                 }
               }
             } catch (cssError) {
-              console.warn('Не удалось добавить CSS стили:', cssError);
+              // Не удалось добавить CSS стили
             }
           }, 200);
         }
       }
     } catch (error) {
-      console.error('Ошибка добавления контента в редактор:', error);
       this.error = 'Ошибка добавления импортированного контента в редактор';
     }
   }

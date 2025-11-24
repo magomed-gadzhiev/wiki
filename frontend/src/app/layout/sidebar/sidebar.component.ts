@@ -341,8 +341,8 @@ export class SidebarComponent implements OnInit {
           }
         }
       },
-      error: (err) => {
-        console.error('Ошибка загрузки разделов:', err);
+      error: () => {
+        // Ошибка загрузки разделов
       }
     });
   }
@@ -365,8 +365,8 @@ export class SidebarComponent implements OnInit {
           return a.name.localeCompare(b.name);
         });
       },
-      error: (err) => {
-        console.error('Ошибка загрузки категорий без раздела:', err);
+      error: () => {
+        // Ошибка загрузки категорий без раздела
       }
     });
   }

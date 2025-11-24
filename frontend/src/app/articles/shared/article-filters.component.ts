@@ -453,8 +453,8 @@ export class ArticleFiltersComponent implements OnInit {
       next: (tags) => {
         this.allTags = tags;
       },
-      error: (err) => {
-        console.error('Error loading tags', err);
+      error: () => {
+        // Ошибка загрузки тегов
       }
     });
   }
@@ -467,8 +467,8 @@ export class ArticleFiltersComponent implements OnInit {
           next: (tags) => {
             this.tagSuggestions = tags.filter(tag => tag.id && !this.selectedTagIds.includes(tag.id));
           },
-          error: (err) => {
-            console.error('Error searching tags', err);
+          error: () => {
+            // Ошибка поиска тегов
           }
         });
       } else {
@@ -512,8 +512,7 @@ export class ArticleFiltersComponent implements OnInit {
         this.availableOptions = options;
         this.loadingOptions = false;
       },
-      error: (err) => {
-        console.error('Error loading options', err);
+      error: () => {
         this.loadingOptions = false;
       }
     });

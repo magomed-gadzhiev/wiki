@@ -238,7 +238,6 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
     
     if (styleMatch && styleMatch[1]) {
       cssText = styleMatch[1].trim();
-      console.log('Извлечены стили из контента:', cssText);
     }
     
     // Убираем теги style из HTML для отображения
@@ -270,7 +269,6 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
     this.styleElement.textContent = cssText;
     document.head.appendChild(this.styleElement);
     
-    console.log('Стили добавлены в head:', cssText.substring(0, 200) + '...');
   }
 
   removeArticleStyles(): void {

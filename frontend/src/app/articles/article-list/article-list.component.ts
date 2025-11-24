@@ -305,8 +305,7 @@ export class ArticleListComponent implements OnInit {
         this.articles = response.results;
         this.loading = false;
       },
-      error: (err) => {
-        console.error('Error loading articles', err);
+      error: () => {
         this.loading = false;
       }
     });

@@ -105,7 +105,7 @@ export class AuthService {
         const user = JSON.parse(userStr);
         this.currentUserSubject.next(user);
       } catch (e) {
-        console.error('Error loading user from storage', e);
+        // Ошибка загрузки пользователя из хранилища
       }
     }
   }

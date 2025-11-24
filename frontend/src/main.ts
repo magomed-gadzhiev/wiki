@@ -12,5 +12,5 @@ bootstrapApplication(AppComponent, {
     provideHttpClient(withInterceptors([authInterceptor])),
     provideAnimations()
   ]
-}).catch(err => console.error(err));
+}).catch(() => {});
 
