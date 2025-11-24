@@ -168,6 +168,32 @@ Authorization: Bearer <access_token>
 - `image` - файл изображения
 - `alt_text` - альтернативный текст (optional)
 
+#### POST /articles/{id}/upload_attachment/
+Загрузка файла (вложения) для статьи
+
+**Form Data:**
+- `file` - файл любого типа (обязательно)
+- `comment` - комментарий к файлу (optional)
+
+**Ограничения:**
+- Максимальный размер файла: 50 МБ
+
+**Ответ:**
+```json
+{
+  "id": "uuid",
+  "file": "string",
+  "file_url": "string",
+  "filename": "string",
+  "file_size": 1234567,
+  "file_size_display": "1.18 МБ",
+  "comment": "string",
+  "uploaded_at": "datetime",
+  "uploaded_by": 1,
+  "uploaded_by_username": "string"
+}
+```
+
 #### POST /articles/import_word/
 Импорт из Word документа
 

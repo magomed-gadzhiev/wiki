@@ -57,6 +57,28 @@ import { AuthService } from '../../core/services/auth.service';
           </tbody>
         </table>
       </div>
+      
+      <div class="card article-attachments" *ngIf="article.attachments && article.attachments.length > 0">
+        <h2>Вложения</h2>
+        <div class="attachments-list">
+          <div class="attachment-item" *ngFor="let attachment of article.attachments">
+            <div class="attachment-info">
+              <a [href]="attachment.file_url" target="_blank" class="attachment-link">
+                <span class="attachment-icon">📎</span>
+                <span class="attachment-filename">{{ attachment.filename }}</span>
+              </a>
+              <div class="attachment-meta">
+                <span class="attachment-size">{{ attachment.file_size_display }}</span>
+                <span class="attachment-date">{{ attachment.uploaded_at | date:'dd.MM.yyyy, HH:mm' }}</span>
+                <span class="attachment-uploader">Загрузил: {{ attachment.uploaded_by_username }}</span>
+              </div>
+              <div class="attachment-comment" *ngIf="attachment.comment">
+                <strong>Комментарий:</strong> {{ attachment.comment }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     
     <div *ngIf="loading" class="loading">Загрузка...</div>
@@ -119,6 +141,57 @@ import { AuthService } from '../../core/services/auth.service';
       color: #666;
       font-weight: normal;
       font-size: 0.9em;
+    }
+    .article-attachments {
+      margin-top: 30px;
+    }
+    .article-attachments h2 {
+      margin-bottom: 20px;
+      font-size: 1.5rem;
+    }
+    .attachments-list {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .attachment-item {
+      padding: 15px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+    .attachment-info {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .attachment-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #007bff;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 1.1em;
+    }
+    .attachment-link:hover {
+      text-decoration: underline;
+    }
+    .attachment-icon {
+      font-size: 1.2em;
+    }
+    .attachment-meta {
+      display: flex;
+      gap: 15px;
+      font-size: 0.9em;
+      color: #666;
+    }
+    .attachment-comment {
+      margin-top: 8px;
+      padding: 8px;
+      background-color: #ffffff;
+      border-left: 3px solid #007bff;
+      font-size: 0.95em;
     }
     .article-content ::ng-deep img {
       max-width: 100%;

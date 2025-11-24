@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Article, ArticleVersion, ArticleImage, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
+from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
 
 
 # Импортируем admin_site внутри функций регистрации, чтобы избежать циклических зависимостей
@@ -99,6 +99,13 @@ def register_models():
         search_fields = ['article__title', 'alt_text']
         readonly_fields = ['id', 'uploaded_at']
     
+    class ArticleAttachmentAdmin(admin.ModelAdmin):
+        list_display = ['article', 'filename', 'file_size', 'uploaded_by', 'uploaded_at']
+        list_filter = ['uploaded_at']
+        search_fields = ['article__title', 'filename', 'comment']
+        readonly_fields = ['id', 'filename', 'file_size', 'uploaded_at']
+        fields = ['article', 'file', 'filename', 'file_size', 'comment', 'uploaded_by', 'uploaded_at']
+    
     class ArticleOptionAdmin(admin.ModelAdmin):
         list_display = ['name', 'sort_order', 'created_at']
         list_editable = ['sort_order']
@@ -174,6 +181,7 @@ def register_models():
     admin_site.register(Article, ArticleAdmin)
     admin_site.register(ArticleVersion, ArticleVersionAdmin)
     admin_site.register(ArticleImage, ArticleImageAdmin)
+    admin_site.register(ArticleAttachment, ArticleAttachmentAdmin)
     admin_site.register(ArticleOption, ArticleOptionAdmin)
     admin_site.register(ArticleOptionValue, ArticleOptionValueAdmin)
     admin_site.register(Group, GroupAdmin)

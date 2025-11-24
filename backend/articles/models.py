@@ -179,6 +179,37 @@ class ArticleImage(models.Model):
         return f"{self.article.title} - {self.image.name}"
 
 
+class ArticleAttachment(models.Model):
+    """Модель для хранения вложений (файлов) статей"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='attachments', verbose_name='Статья')
+    file = models.FileField(upload_to='articles/attachments/', verbose_name='Файл')
+    filename = models.CharField(max_length=255, verbose_name='Имя файла')
+    file_size = models.BigIntegerField(verbose_name='Размер файла (байт)')
+    comment = models.TextField(blank=True, verbose_name='Комментарий')
+    uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name='Загружено')
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name='Загрузил')
+
+    class Meta:
+        verbose_name = 'Вложение статьи'
+        verbose_name_plural = 'Вложения статей'
+        ordering = ['-uploaded_at']
+        indexes = [
+            models.Index(fields=['article', '-uploaded_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.article.title} - {self.filename}"
+    
+    def save(self, *args, **kwargs):
+        # Автоматически сохраняем имя файла и размер при сохранении
+        if self.file and not self.filename:
+            self.filename = self.file.name
+        if self.file and not self.file_size:
+            self.file_size = self.file.size
+        super().save(*args, **kwargs)
+
+
 class ArticleOption(models.Model):
     """Модель опции для статей (название опции, заносится в админке)"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

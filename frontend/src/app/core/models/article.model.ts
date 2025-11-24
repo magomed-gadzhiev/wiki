@@ -61,6 +61,7 @@ export interface Article {
   can_edit: User[];
   can_delete: User[];
   images: ArticleImage[];
+  attachments: ArticleAttachment[];
   option_values: ArticleOptionValue[];
   versions_count: number;
   latest_version?: ArticleVersion;
@@ -85,6 +86,19 @@ export interface ArticleImage {
   alt_text: string;
   uploaded_at: string;
   uploaded_by: number;
+}
+
+export interface ArticleAttachment {
+  id: string;
+  file: string;
+  file_url: string;
+  filename: string;
+  file_size: number;
+  file_size_display: string;
+  comment: string;
+  uploaded_at: string;
+  uploaded_by: number;
+  uploaded_by_username: string;
 }
 
 export interface ArticleOption {

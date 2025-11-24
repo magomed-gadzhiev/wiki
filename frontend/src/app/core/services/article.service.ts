@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { Article, ArticleVersion, ArticleImage, Category, Section, Tag, ArticleOption, ArticleOptionValue } from '../models/article.model';
+import { Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Section, Tag, ArticleOption, ArticleOptionValue } from '../models/article.model';
 
 @Injectable({
   providedIn: 'root'
@@ -82,6 +82,15 @@ export class ArticleService {
       formData.append('alt_text', altText);
     }
     return this.http.post<ArticleImage>(`${this.apiUrl}/${articleId}/upload_image/`, formData);
+  }
+
+  uploadAttachment(articleId: string, file: File, comment?: string): Observable<ArticleAttachment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (comment) {
+      formData.append('comment', comment);
+    }
+    return this.http.post<ArticleAttachment>(`${this.apiUrl}/${articleId}/upload_attachment/`, formData);
   }
 
   importWord(file: File): Observable<{ content: string; warnings: string[] }> {

@@ -5,7 +5,7 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } 
 import { Observable, forkJoin } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ArticleService } from '../../core/services/article.service';
-import { Article, Category, Tag, ArticleOption, ArticleOptionValue } from '../../core/models/article.model';
+import { Article, Category, Tag, ArticleOption, ArticleOptionValue, ArticleAttachment } from '../../core/models/article.model';
 import { AuthService } from '../../core/services/auth.service';
 import * as grapesjs from 'grapesjs';
 
@@ -191,6 +191,83 @@ import * as grapesjs from 'grapesjs';
             ></textarea>
           </div>
           
+          <div class="form-group" *ngIf="isEditMode && articleId">
+            <label>Вложения к статье</label>
+            <div class="attachments-section">
+              <div class="attachment-upload">
+                <input 
+                  type="file" 
+                  #attachmentInput
+                  id="attachmentInput"
+                  style="display: none"
+                  (change)="onAttachmentFileSelected($event)"
+                />
+                <div class="upload-controls">
+                  <button 
+                    type="button" 
+                    class="btn btn-sm btn-primary"
+                    (click)="attachmentInput.click()"
+                    [disabled]="uploadingAttachment"
+                  >
+                    {{ uploadingAttachment ? 'Загрузка...' : '📎 Загрузить файл' }}
+                  </button>
+                  <span class="file-size-hint">Максимальный размер: 50 МБ</span>
+                </div>
+                <div class="attachment-comment-input" *ngIf="selectedAttachmentFile">
+                  <label for="attachment-comment">Комментарий к файлу (опционально):</label>
+                  <textarea 
+                    id="attachment-comment"
+                    [(ngModel)]="attachmentComment"
+                    [ngModelOptions]="{standalone: true}"
+                    rows="2"
+                    placeholder="Введите комментарий к файлу"
+                    class="form-control"
+                  ></textarea>
+                  <div class="attachment-actions">
+                    <button 
+                      type="button" 
+                      class="btn btn-sm btn-success"
+                      (click)="uploadAttachment()"
+                      [disabled]="uploadingAttachment"
+                    >
+                      Загрузить
+                    </button>
+                    <button 
+                      type="button" 
+                      class="btn btn-sm btn-secondary"
+                      (click)="cancelAttachmentUpload()"
+                      [disabled]="uploadingAttachment"
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                </div>
+                <div *ngIf="attachmentUploadError" class="error-message">
+                  {{ attachmentUploadError }}
+                </div>
+              </div>
+              
+              <div class="attachments-list" *ngIf="attachments && attachments.length > 0">
+                <div class="attachment-item" *ngFor="let attachment of attachments">
+                  <div class="attachment-info">
+                    <a [href]="attachment.file_url" target="_blank" class="attachment-link">
+                      <span class="attachment-icon">📎</span>
+                      <span class="attachment-filename">{{ attachment.filename }}</span>
+                    </a>
+                    <div class="attachment-meta">
+                      <span class="attachment-size">{{ attachment.file_size_display }}</span>
+                      <span class="attachment-date">{{ attachment.uploaded_at | date:'dd.MM.yyyy, HH:mm' }}</span>
+                      <span class="attachment-uploader">Загрузил: {{ attachment.uploaded_by_username }}</span>
+                    </div>
+                    <div class="attachment-comment" *ngIf="attachment.comment">
+                      <strong>Комментарий:</strong> {{ attachment.comment }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" [disabled]="articleForm.invalid || saving">
               {{ saving ? 'Сохранение...' : 'Сохранить' }}
@@ -334,10 +411,88 @@ import * as grapesjs from 'grapesjs';
     .add-option-btn {
       align-self: flex-start;
     }
+    .attachments-section {
+      margin-top: 10px;
+    }
+    .attachment-upload {
+      margin-bottom: 20px;
+    }
+    .upload-controls {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 10px;
+    }
+    .file-size-hint {
+      font-size: 0.9em;
+      color: #666;
+    }
+    .attachment-comment-input {
+      margin-top: 15px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+    }
+    .attachment-comment-input label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .attachment-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .attachments-list {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    .attachment-item {
+      padding: 15px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+    .attachment-info {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .attachment-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #007bff;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 1.1em;
+    }
+    .attachment-link:hover {
+      text-decoration: underline;
+    }
+    .attachment-icon {
+      font-size: 1.2em;
+    }
+    .attachment-meta {
+      display: flex;
+      gap: 15px;
+      font-size: 0.9em;
+      color: #666;
+    }
+    .attachment-comment {
+      margin-top: 8px;
+      padding: 8px;
+      background-color: #ffffff;
+      border-left: 3px solid #007bff;
+      font-size: 0.95em;
+    }
   `]
 })
 export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('fileInput') fileInput: any;
+  @ViewChild('attachmentInput') attachmentInput: any;
   @ViewChild('gjsEditor', { static: false }) gjsEditor!: ElementRef;
   
   articleForm: FormGroup;
@@ -355,6 +510,11 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   editor: any = null;
   options: ArticleOption[] = [];
   optionValuesList: Array<{ id?: string; option_id: string | null; value: string }> = [];
+  attachments: ArticleAttachment[] = [];
+  selectedAttachmentFile: File | null = null;
+  attachmentComment: string = '';
+  uploadingAttachment = false;
+  attachmentUploadError: string | null = null;
 
   constructor(
     private fb: FormBuilder,
@@ -2341,6 +2501,12 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           tag_ids: tagIds
         });
         
+        // Загружаем вложения
+        this.attachments = article.attachments || [];
+        
+        // Загружаем вложения
+        this.attachments = article.attachments || [];
+        
         // Загружаем контент в редактор
         if (article.content) {
           setTimeout(() => {
@@ -2646,6 +2812,58 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       }
     } catch (error) {
       this.error = 'Ошибка добавления импортированного контента в редактор';
+    }
+  }
+
+  onAttachmentFileSelected(event: any): void {
+    const file = event.target.files[0];
+    if (file) {
+      // Проверяем размер файла (50 МБ = 50 * 1024 * 1024 байт)
+      const maxSize = 50 * 1024 * 1024;
+      if (file.size > maxSize) {
+        this.attachmentUploadError = `Размер файла превышает максимально допустимый размер 50 МБ. Размер файла: ${(file.size / (1024 * 1024)).toFixed(2)} МБ`;
+        return;
+      }
+      
+      this.selectedAttachmentFile = file;
+      this.attachmentUploadError = null;
+    }
+  }
+
+  uploadAttachment(): void {
+    if (!this.selectedAttachmentFile || !this.articleId) {
+      return;
+    }
+
+    this.uploadingAttachment = true;
+    this.attachmentUploadError = null;
+
+    this.articleService.uploadAttachment(
+      this.articleId,
+      this.selectedAttachmentFile,
+      this.attachmentComment || undefined
+    ).subscribe({
+      next: (attachment) => {
+        // Добавляем загруженный файл в список
+        this.attachments = [...this.attachments, attachment];
+        // Очищаем форму загрузки
+        this.cancelAttachmentUpload();
+        this.uploadingAttachment = false;
+      },
+      error: (err) => {
+        this.attachmentUploadError = err.error?.error || 'Ошибка загрузки файла';
+        this.uploadingAttachment = false;
+      }
+    });
+  }
+
+  cancelAttachmentUpload(): void {
+    this.selectedAttachmentFile = null;
+    this.attachmentComment = '';
+    this.attachmentUploadError = null;
+    // Сбрасываем input файла
+    if (this.attachmentInput && this.attachmentInput.nativeElement) {
+      this.attachmentInput.nativeElement.value = '';
     }
   }
 

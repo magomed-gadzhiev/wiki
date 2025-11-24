@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from django.db.models import Q, F
 from django.db.models.functions import Lower
 from django.utils import timezone
-from .models import Article, ArticleVersion, ArticleImage, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
-from .serializers import ArticleSerializer, ArticleListSerializer, ArticleVersionSerializer, ArticleImageSerializer, CategorySerializer, SectionSerializer, TagSerializer, ArticleOptionSerializer, ArticleOptionValueSerializer, GroupSerializer, GroupDetailSerializer, CategoryPermissionSerializer
+from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
+from .serializers import ArticleSerializer, ArticleListSerializer, ArticleVersionSerializer, ArticleImageSerializer, ArticleAttachmentSerializer, CategorySerializer, SectionSerializer, TagSerializer, ArticleOptionSerializer, ArticleOptionValueSerializer, GroupSerializer, GroupDetailSerializer, CategoryPermissionSerializer
 from .permissions import ArticlePermission
 from .word_import_processor import WordImportProcessor
 import mammoth
@@ -616,6 +616,41 @@ class ArticleViewSet(viewsets.ModelViewSet):
         )
         
         serializer = ArticleImageSerializer(article_image, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'])
+    def upload_attachment(self, request, pk=None):
+        """Загрузить файл (вложение) для статьи"""
+        article = self.get_object()
+        file = request.FILES.get('file')
+        comment = request.data.get('comment', '')
+        
+        # Максимальный размер файла: 50 МБ
+        MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 МБ в байтах
+        
+        if not file:
+            return Response(
+                {'error': 'Файл обязателен'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Проверка размера файла
+        if file.size > MAX_FILE_SIZE:
+            return Response(
+                {'error': f'Размер файла превышает максимально допустимый размер 50 МБ. Размер файла: {file.size / (1024 * 1024):.2f} МБ'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        attachment = ArticleAttachment.objects.create(
+            article=article,
+            file=file,
+            filename=file.name,
+            file_size=file.size,
+            comment=comment,
+            uploaded_by=request.user
+        )
+        
+        serializer = ArticleAttachmentSerializer(attachment, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
     @action(detail=False, methods=['post'])

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Article, ArticleVersion, ArticleImage, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
+from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -129,6 +129,35 @@ class ArticleImageSerializer(serializers.ModelSerializer):
         return None
 
 
+class ArticleAttachmentSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+    uploaded_by_username = serializers.CharField(source='uploaded_by.username', read_only=True)
+    file_size_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ArticleAttachment
+        fields = ['id', 'file', 'file_url', 'filename', 'file_size', 'file_size_display', 
+                  'comment', 'uploaded_at', 'uploaded_by', 'uploaded_by_username']
+        read_only_fields = ['id', 'filename', 'file_size', 'uploaded_at', 'uploaded_by']
+    
+    def get_file_url(self, obj):
+        if obj.file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url
+        return None
+    
+    def get_file_size_display(self, obj):
+        """Возвращает размер файла в читаемом формате"""
+        size = obj.file_size
+        for unit in ['Б', 'КБ', 'МБ', 'ГБ']:
+            if size < 1024.0:
+                return f"{size:.2f} {unit}"
+            size /= 1024.0
+        return f"{size:.2f} ТБ"
+
+
 class ArticleOptionSerializer(serializers.ModelSerializer):
     """Сериализатор для опций статей"""
     class Meta:
@@ -170,6 +199,7 @@ class ArticleSerializer(serializers.ModelSerializer):
     can_edit = UserSerializer(many=True, read_only=True)
     can_delete = UserSerializer(many=True, read_only=True)
     images = ArticleImageSerializer(many=True, read_only=True)
+    attachments = ArticleAttachmentSerializer(many=True, read_only=True)
     option_values = ArticleOptionValueSerializer(many=True, read_only=True)
     versions_count = serializers.IntegerField(source='versions.count', read_only=True)
     latest_version = serializers.SerializerMethodField()
@@ -231,7 +261,7 @@ class ArticleSerializer(serializers.ModelSerializer):
             'tags', 'tag_ids',
             'can_view', 'can_edit', 'can_delete',
             'can_view_ids', 'can_edit_ids', 'can_delete_ids',
-            'images', 'option_values', 'option_values_data',
+            'images', 'attachments', 'option_values', 'option_values_data',
             'versions_count', 'latest_version',
             'is_deleted', 'deleted_at'
         ]
