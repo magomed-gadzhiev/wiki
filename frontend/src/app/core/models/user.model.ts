@@ -5,5 +5,6 @@ export interface User {
   last_name: string;
   email: string;
   is_staff?: boolean;
+  must_change_password?: boolean;
 }
 

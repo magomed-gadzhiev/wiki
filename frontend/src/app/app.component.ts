@@ -60,7 +60,12 @@ export class AppComponent implements OnInit {
           this.router.navigate(['/login']);
           return of(null);
         })
-      ).subscribe();
+      ).subscribe(user => {
+        // Если требуется смена пароля и пользователь не на странице смены пароля, перенаправляем
+        if (user && user.must_change_password && !currentUrl.startsWith('/change-password')) {
+          this.router.navigate(['/change-password']);
+        }
+      });
     } else {
       // Если нет токена, редиректим на логин
       this.router.navigate(['/login']);

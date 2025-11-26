@@ -3,10 +3,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from .serializers import UserSerializer
+
+User = get_user_model()
 
 
 @api_view(['POST'])
@@ -130,4 +132,38 @@ def users_list(request):
     
     serializer = UserSerializer(users[:50], many=True)  # Ограничение до 50 пользователей
     return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    """Смена пароля пользователя"""
+    old_password = request.data.get('old_password')
+    new_password = request.data.get('new_password')
+    
+    if not old_password or not new_password:
+        return Response(
+            {'error': 'old_password и new_password обязательны'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    user = request.user
+    
+    # Проверяем старый пароль
+    if not user.check_password(old_password):
+        return Response(
+            {'error': 'Неверный текущий пароль'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Устанавливаем новый пароль
+    user.set_password(new_password)
+    # Сбрасываем флаг обязательной смены пароля
+    user.must_change_password = False
+    user.save()
+    
+    return Response({
+        'message': 'Пароль успешно изменен',
+        'user': UserSerializer(user).data
+    })
 

@@ -3,8 +3,10 @@
 """
 from django.contrib import admin
 from django.contrib.admin import AdminSite
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.http import HttpResponseForbidden
+
+User = get_user_model()
 
 
 class SuperUserAdminSite(AdminSite):

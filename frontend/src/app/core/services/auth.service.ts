@@ -91,6 +91,18 @@ export class AuthService {
     );
   }
 
+  changePassword(oldPassword: string, newPassword: string): Observable<{ message: string; user: User }> {
+    return this.http.post<{ message: string; user: User }>(`${this.apiUrl}/change-password/`, {
+      old_password: oldPassword,
+      new_password: newPassword
+    }).pipe(
+      tap(response => {
+        this.currentUserSubject.next(response.user);
+        localStorage.setItem('user', JSON.stringify(response.user));
+      })
+    );
+  }
+
   private setUser(user: User, tokens: { access: string; refresh: string }): void {
     localStorage.setItem('access_token', tokens.access);
     localStorage.setItem('refresh_token', tokens.refresh);

@@ -109,8 +109,13 @@ export class LoginComponent {
         this.loginForm.value.username,
         this.loginForm.value.password
       ).subscribe({
-        next: () => {
-          this.router.navigate(['/articles']);
+        next: (response) => {
+          // Если требуется смена пароля, перенаправляем на страницу смены пароля
+          if (response.user.must_change_password) {
+            this.router.navigate(['/change-password']);
+          } else {
+            this.router.navigate(['/articles']);
+          }
         },
         error: (err) => {
           this.error = err.error?.error || 'Ошибка входа';
