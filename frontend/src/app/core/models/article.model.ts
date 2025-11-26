@@ -36,6 +36,7 @@ export interface Category {
   section?: SectionSimple | null;
   sort_order: number;
   created_at: string;
+  user_permission_level?: 'none' | 'read' | 'full' | null;
 }
 
 export interface Tag {

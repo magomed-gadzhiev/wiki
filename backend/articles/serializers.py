@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
 
 
@@ -75,11 +77,50 @@ class SectionSimpleSerializer(serializers.ModelSerializer):
 
 class CategorySerializer(serializers.ModelSerializer):
     section = SectionSimpleSerializer(read_only=True)
+    user_permission_level = serializers.SerializerMethodField()
     
     class Meta:
         model = Category
-        fields = ['id', 'name', 'slug', 'description', 'section', 'sort_order', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'name', 'slug', 'description', 'section', 'sort_order', 'created_at', 'user_permission_level']
+        read_only_fields = ['id', 'created_at', 'user_permission_level']
+    
+    def get_user_permission_level(self, obj):
+        """
+        Определяет максимальный уровень прав пользователя на категорию через группы.
+        Возвращает: 'none', 'read', 'full' или None (если категории нет или нет прав через группы)
+        """
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        
+        user = request.user
+        
+        # Суперпользователи имеют полные права
+        if user.is_superuser:
+            return 'full'
+        
+        # Получаем все группы пользователя
+        user_groups = user.article_groups.all()
+        if not user_groups.exists():
+            return None
+        
+        # Получаем все права групп пользователя на эту категорию
+        permissions = CategoryPermission.objects.filter(
+            group__in=user_groups,
+            category=obj
+        ).values_list('permission_level', flat=True)
+        
+        if not permissions:
+            return None
+        
+        # Определяем максимальный уровень прав
+        # Приоритет: full > read > none
+        if 'full' in permissions:
+            return 'full'
+        elif 'read' in permissions:
+            return 'read'
+        else:
+            return 'none'
 
 
 class TagSerializer(serializers.ModelSerializer):

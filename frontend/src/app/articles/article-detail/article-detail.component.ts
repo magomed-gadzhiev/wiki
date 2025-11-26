@@ -30,7 +30,7 @@ import { AuthService } from '../../core/services/auth.service';
         <span>Создано: {{ article.created_at | date:'dd.MM.yyyy, HH:mm' }}</span>
         <span>Обновлено: {{ article.updated_at | date:'dd.MM.yyyy, HH:mm' }}</span>
         <span>Просмотров: {{ article.view_count }}</span>
-        <a *ngIf="isAuthenticated()" [routerLink]="['/articles', article.id, 'versions']">История версий</a>
+        <a *ngIf="isAuthenticated() && canViewVersions()" [routerLink]="['/articles', article.id, 'versions']">История версий</a>
       </div>
       
       <div class="card article-content">
@@ -282,6 +282,27 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
     return this.article.author.id === user.id || 
            this.article.can_delete.some(u => u.id === user.id) ||
            (user.is_staff ?? false);
+  }
+
+  canViewVersions(): boolean {
+    if (!this.article || !this.isAuthenticated()) return false;
+    const user = this.authService.getCurrentUser();
+    if (!user) return false;
+    
+    // Суперпользователи и авторы имеют доступ
+    if (this.article.author.id === user.id || (user.is_staff ?? false)) {
+      return true;
+    }
+    
+    // Проверяем права на категорию
+    if (this.article.category && this.article.category.user_permission_level) {
+      // Только полные права (full) дают доступ к версиям
+      return this.article.category.user_permission_level === 'full';
+    }
+    
+    // Если нет категории или нет прав через группы, проверяем индивидуальные права
+    // Если есть права на редактирование, значит можно просматривать версии
+    return this.article.can_edit.some(u => u.id === user.id);
   }
 
   loadArticle(id: string): void {

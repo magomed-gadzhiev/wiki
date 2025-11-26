@@ -161,7 +161,17 @@ export class ArticleVersionsComponent implements OnInit, OnDestroy {
         this.loading = false;
       },
       error: (err) => {
-        this.error = err.error?.error || 'Ошибка загрузки версий';
+        if (err.status === 403) {
+          this.error = err.error?.error || 'У вас нет прав на просмотр истории версий. Доступно только чтение статей.';
+          // Перенаправляем на страницу статьи через 3 секунды
+          setTimeout(() => {
+            if (this.articleId) {
+              this.router.navigate(['/articles', this.articleId]);
+            }
+          }, 3000);
+        } else {
+          this.error = err.error?.error || 'Ошибка загрузки версий';
+        }
         this.loading = false;
       }
     });

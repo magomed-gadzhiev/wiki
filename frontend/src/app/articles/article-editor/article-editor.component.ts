@@ -48,11 +48,14 @@ import * as grapesjs from 'grapesjs';
               formControlName="category_id"
             >
               <option [ngValue]="null">-- Без категории --</option>
-              <option *ngFor="let category of (categories || []); trackBy: trackByCategoryId" [ngValue]="category.id">
+              <option *ngFor="let category of (availableCategoriesForCreation || []); trackBy: trackByCategoryId" [ngValue]="category.id">
                 {{ category.name }}
               </option>
             </select>
-            <div *ngIf="articleForm.get('category_id')?.value" style="font-size: 12px; color: #666; margin-top: 5px;">
+            <div *ngIf="categorySelectionError" class="error-message" style="margin-top: 5px;">
+              {{ categorySelectionError }}
+            </div>
+            <div *ngIf="articleForm.get('category_id')?.value && !categorySelectionError" style="font-size: 12px; color: #666; margin-top: 5px;">
               Текущее значение: {{ articleForm.get('category_id')?.value }}
             </div>
           </div>
@@ -501,6 +504,8 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   saving = false;
   error: string | null = null;
   categories: Category[] = [];
+  availableCategoriesForCreation: Category[] = [];
+  categorySelectionError: string | null = null;
   tags: Tag[] = [];
   selectedTags: Tag[] = [];
   tagSuggestions: Tag[] = [];
@@ -533,6 +538,11 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       change_description: [''],
       option_values_data: [[]]
     });
+
+    // Подписываемся на изменения категории для валидации прав
+    this.articleForm.get('category_id')?.valueChanges.subscribe(categoryId => {
+      this.validateCategorySelection(categoryId);
+    });
   }
 
   ngOnInit(): void {
@@ -556,11 +566,24 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         // Убеждаемся, что categories - это массив
         this.categories = Array.isArray(categories) ? categories : [];
         
+        // Фильтруем категории для создания статей - только с полными правами (full)
+        // В режиме редактирования показываем все категории, так как статья уже существует
+        if (this.isEditMode) {
+          this.availableCategoriesForCreation = this.categories;
+        } else {
+          this.availableCategoriesForCreation = this.categories.filter(category => 
+            category.user_permission_level === 'full' || category.user_permission_level === null
+          );
+        }
+        
         // Если это создание новой статьи и указана категория в URL
         if (!this.isEditMode && categoryId) {
-          const category = this.categories.find(c => c.id === categoryId);
+          const category = this.availableCategoriesForCreation.find(c => c.id === categoryId);
           if (category) {
             this.articleForm.patchValue({ category_id: categoryId });
+          } else {
+            // Категория указана в URL, но у пользователя нет прав на создание
+            this.categorySelectionError = 'У вас нет прав на создание статей в этой категории';
           }
         }
         
@@ -573,6 +596,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       },
       error: () => {
         this.categories = []; // Устанавливаем пустой массив при ошибке
+        this.availableCategoriesForCreation = [];
         // Все равно загружаем статью, даже если категории не загрузились
         this.loadTags();
         if (id) {
@@ -580,6 +604,34 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         }
       }
     });
+  }
+
+  validateCategorySelection(categoryId: string | null): void {
+    if (!categoryId) {
+      this.categorySelectionError = null;
+      return;
+    }
+
+    // В режиме редактирования не проверяем права (статья уже существует)
+    if (this.isEditMode) {
+      this.categorySelectionError = null;
+      return;
+    }
+
+    const category = this.categories.find(c => c.id === categoryId);
+    if (!category) {
+      this.categorySelectionError = null;
+      return;
+    }
+
+    // Проверяем права на категорию
+    if (category.user_permission_level === 'read' || category.user_permission_level === 'none') {
+      this.categorySelectionError = 'У вас нет прав на создание статей в этой категории. Доступно только чтение.';
+      // Сбрасываем выбор категории
+      this.articleForm.patchValue({ category_id: null });
+    } else {
+      this.categorySelectionError = null;
+    }
   }
 
   loadTags(): void {
@@ -2476,6 +2528,22 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         // Устанавливаем значения формы
         const categoryId = article.category?.id || null;
         
+        // В режиме редактирования добавляем категорию статьи в список доступных категорий,
+        // даже если у пользователя нет полных прав (статья уже существует)
+        if (categoryId && this.isEditMode) {
+          const articleCategory = article.category;
+          if (articleCategory) {
+            // Проверяем, есть ли уже эта категория в списке
+            const existingCategory = this.categories.find(c => c.id === categoryId);
+            if (!existingCategory) {
+              // Добавляем категорию статьи в список категорий
+              this.categories.push(articleCategory);
+            }
+            // Обновляем список доступных категорий для редактирования
+            this.availableCategoriesForCreation = this.categories;
+          }
+        }
+        
         // Устанавливаем выбранные теги
         this.selectedTags = article.tags || [];
         const tagIds = this.selectedTags.map(tag => tag.id);
@@ -2541,6 +2609,19 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   onSubmit(): void {
+    // Проверяем права на категорию перед отправкой (только для создания новых статей)
+    if (!this.isEditMode) {
+      const categoryId = this.articleForm.get('category_id')?.value;
+      if (categoryId) {
+        const category = this.categories.find(c => c.id === categoryId);
+        if (category && (category.user_permission_level === 'read' || category.user_permission_level === 'none')) {
+          this.categorySelectionError = 'У вас нет прав на создание статей в этой категории. Доступно только чтение.';
+          this.error = 'Невозможно создать статью: недостаточно прав на категорию.';
+          return;
+        }
+      }
+    }
+
     // Получаем контент из редактора перед сохранением
     if (this.editor) {
       try {

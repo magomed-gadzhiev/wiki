@@ -548,11 +548,32 @@ class ArticleViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def versions(self, request, pk=None):
-        """Получить все версии статьи"""
+        """Получить все версии статьи (только для пользователей с полными правами на категорию)"""
         article = self.get_object()
-        versions = article.versions.all()
-        serializer = ArticleVersionSerializer(versions, many=True)
-        return Response(serializer.data)
+        
+        # Проверяем права на просмотр версий
+        # Суперпользователи и авторы имеют доступ
+        if request.user.is_superuser or article.author == request.user:
+            versions = article.versions.all()
+            serializer = ArticleVersionSerializer(versions, many=True)
+            return Response(serializer.data)
+        
+        # Проверяем права через группы на категорию
+        from .permissions import ArticlePermission
+        permission_checker = ArticlePermission()
+        category_permission = permission_checker._get_category_permission_level(request.user, article.category)
+        
+        # Только пользователи с полными правами (full) могут просматривать версии
+        if category_permission == 'full':
+            versions = article.versions.all()
+            serializer = ArticleVersionSerializer(versions, many=True)
+            return Response(serializer.data)
+        else:
+            # При праве только на чтение или отсутствии прав - запрещаем просмотр версий
+            return Response(
+                {'error': 'У вас нет прав на просмотр истории версий. Доступно только чтение статей.'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
     
     @action(detail=True, methods=['post'])
     def restore_version(self, request, pk=None):
@@ -805,7 +826,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
 class ArticleVersionViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet для просмотра версий статей
+    ViewSet для просмотра версий статей (только для пользователей с полными правами на категорию)
     """
     queryset = ArticleVersion.objects.all()
     serializer_class = ArticleVersionSerializer
@@ -816,7 +837,36 @@ class ArticleVersionViewSet(viewsets.ReadOnlyModelViewSet):
         article_id = self.request.query_params.get('article', None)
         if article_id:
             queryset = queryset.filter(article_id=article_id)
-        return queryset.select_related('article', 'author')
+        
+        # Фильтруем по правам доступа
+        user = self.request.user
+        
+        # Суперпользователи видят все версии
+        if user.is_superuser:
+            return queryset.select_related('article', 'author')
+        
+        # Фильтруем версии по правам на категорию статьи
+        from .permissions import ArticlePermission
+        permission_checker = ArticlePermission()
+        
+        # Получаем статьи, на которые у пользователя есть полные права
+        allowed_articles = []
+        for version in queryset.select_related('article', 'article__category', 'author'):
+            article = version.article
+            
+            # Автор статьи имеет доступ к версиям
+            if article.author == user:
+                allowed_articles.append(version.id)
+                continue
+            
+            # Проверяем права через группы на категорию
+            category_permission = permission_checker._get_category_permission_level(user, article.category)
+            
+            # Только полные права (full) дают доступ к версиям
+            if category_permission == 'full':
+                allowed_articles.append(version.id)
+        
+        return queryset.filter(id__in=allowed_articles).select_related('article', 'author')
 
 
 class ArticleImageViewSet(viewsets.ModelViewSet):
@@ -930,6 +980,12 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
         return Category.objects.filter(
             id__in=category_permissions
         ).order_by('section', 'sort_order', 'name').select_related('section')
+    
+    def get_serializer_context(self):
+        """Передает request в контекст сериализатора для определения прав пользователя"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
 
 class TagViewSet(viewsets.ModelViewSet):

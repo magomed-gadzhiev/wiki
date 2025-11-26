@@ -1,5 +1,5 @@
 from rest_framework import permissions
-from .models import Group, CategoryPermission
+from .models import Group, CategoryPermission, Category
 
 
 class ArticlePermission(permissions.BasePermission):
@@ -16,9 +16,28 @@ class ArticlePermission(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return request.user.is_authenticated
         
-        # Для создания требуется аутентификация
+        # Для создания требуется аутентификация и проверка прав на категорию
         if request.method == 'POST':
-            return request.user.is_authenticated
+            if not request.user.is_authenticated:
+                return False
+            
+            # Проверяем права на категорию, если она указана
+            category_id = request.data.get('category_id') or request.data.get('category')
+            if category_id:
+                try:
+                    category = Category.objects.get(pk=category_id)
+                    category_permission = self._get_category_permission_level(request.user, category)
+                    
+                    # Если у пользователя только права на чтение или нет прав, запрещаем создание
+                    if category_permission == 'read' or category_permission == 'none':
+                        return False
+                    # Если есть полные права или нет прав через группы (None), разрешаем создание
+                    # (None означает, что нет прав через группы, используется старая система прав)
+                except Category.DoesNotExist:
+                    # Категория не найдена - разрешаем создание (валидация произойдет в сериализаторе)
+                    pass
+            
+            return True
         
         return True
     
