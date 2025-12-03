@@ -8,81 +8,8 @@ import { AuthService } from '../../core/services/auth.service';
   selector: 'app-login',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterModule],
-  template: `
-    <div class="login-container">
-      <div class="card login-card">
-        <h2>Вход</h2>
-        <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
-          <div class="form-group">
-            <label for="username">Имя пользователя</label>
-            <input 
-              id="username" 
-              type="text" 
-              formControlName="username" 
-              [class.error]="loginForm.get('username')?.invalid && loginForm.get('username')?.touched"
-            />
-            <div *ngIf="loginForm.get('username')?.invalid && loginForm.get('username')?.touched" class="error-message">
-              Имя пользователя обязательно
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="password">Пароль</label>
-            <input 
-              id="password" 
-              type="password" 
-              formControlName="password"
-              [class.error]="loginForm.get('password')?.invalid && loginForm.get('password')?.touched"
-            />
-            <div *ngIf="loginForm.get('password')?.invalid && loginForm.get('password')?.touched" class="error-message">
-              Пароль обязателен
-            </div>
-          </div>
-          
-          <div *ngIf="error" class="error-message">{{ error }}</div>
-          
-          <button type="submit" class="btn btn-primary" [disabled]="loginForm.invalid || loading">
-            {{ loading ? 'Вход...' : 'Войти' }}
-          </button>
-        </form>
-        
-        <p class="register-link">
-          Нет аккаунта? <a routerLink="/register">Зарегистрироваться</a>
-        </p>
-      </div>
-    </div>
-  `,
-  styles: [`
-    .login-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: calc(100vh - 200px);
-    }
-    .login-card {
-      max-width: 400px;
-      width: 100%;
-    }
-    .login-card h2 {
-      margin-bottom: 20px;
-    }
-    .error-message {
-      color: #dc3545;
-      font-size: 12px;
-      margin-top: 5px;
-    }
-    input.error {
-      border-color: #dc3545;
-    }
-    .register-link {
-      margin-top: 15px;
-      text-align: center;
-    }
-    .register-link a {
-      color: #007bff;
-      text-decoration: none;
-    }
-  `]
+  templateUrl: './login.component.html',
+  styleUrls: ['./login.component.scss']
 })
 export class LoginComponent {
   loginForm: FormGroup;

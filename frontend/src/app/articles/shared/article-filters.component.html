@@ -1,0 +1,115 @@
+<div class="filters-section">
+  <div class="filters-header" (click)="toggleFilters()">
+    <span class="filters-title">Фильтры</span>
+    <button type="button" class="btn-toggle-filters" [class.collapsed]="!filtersExpanded">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+  <div class="filters-content" *ngIf="filtersExpanded">
+    <div class="filters-row">
+      <div class="filter-group">
+        <label><strong>Фильтр по тегам:</strong></label>
+        <div class="tags-filter">
+          <div class="tags-input-wrapper">
+            <input 
+              type="text" 
+              placeholder="Введите название тега..." 
+              [(ngModel)]="tagSearchQuery"
+              (input)="onTagSearch()"
+              (focus)="showTagSuggestions = true"
+              (blur)="hideTagSuggestions()"
+              class="tag-filter-input"
+              [ngModelOptions]="{standalone: true}"
+            />
+            <div class="tags-suggestions" *ngIf="tagSuggestions.length > 0 && showTagSuggestions" (mousedown)="$event.preventDefault()">
+              <div 
+                *ngFor="let tag of tagSuggestions" 
+                class="tag-suggestion"
+                (click)="selectTagForFilter(tag)"
+              >
+                {{ tag.name }}
+              </div>
+            </div>
+          </div>
+          <div class="selected-filter-tags" *ngIf="selectedTagIds.length > 0">
+            <span 
+              *ngFor="let tagId of selectedTagIds" 
+              class="filter-tag-badge"
+            >
+              {{ getTagName(tagId) }}
+              <button type="button" class="filter-tag-remove" (click)="removeTagFilter(tagId)">×</button>
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="filter-group option-filter-group">
+        <label>Фильтр по опциям:</label>
+        <button class="btn btn-secondary btn-add-option" (click)="openOptionsModal()" title="Выбрать опции">
+          +
+        </button>
+        <div class="selected-option-filters" *ngIf="selectedOptionFilters.length > 0">
+          <div 
+            *ngFor="let filter of selectedOptionFilters" 
+            class="option-filter-item"
+          >
+            <span class="option-filter-name">{{ getOptionName(filter.option_id) }}:</span>
+            <input 
+              type="text" 
+              [(ngModel)]="filter.option_value"
+              (input)="onFilterChange()"
+              placeholder="Значение..."
+              class="option-filter-value"
+              [ngModelOptions]="{standalone: true}"
+            />
+            <button type="button" class="btn btn-sm btn-danger" (click)="removeOptionFilter(filter)">
+              ×
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно для выбора опций -->
+<div class="modal-overlay" *ngIf="showOptionsModal" (click)="closeOptionsModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Выбор опций для фильтрации</h2>
+      <button type="button" class="modal-close" (click)="closeOptionsModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div *ngIf="loadingOptions" class="loading">Загрузка опций...</div>
+      <div *ngIf="!loadingOptions && availableOptions.length === 0" class="empty-state">
+        Нет доступных опций
+      </div>
+      <div *ngIf="!loadingOptions && availableOptions.length > 0" class="options-list">
+        <div 
+          *ngFor="let option of availableOptions" 
+          class="option-item"
+          [class.selected]="isOptionSelected(option.id)"
+          (click)="toggleOption(option)"
+        >
+          <input 
+            type="checkbox" 
+            [checked]="isOptionSelected(option.id)"
+            (click)="$event.stopPropagation()"
+            (change)="toggleOption(option)"
+          />
+          <div class="option-info">
+            <div class="option-name">{{ option.name }}</div>
+            <div class="option-description" *ngIf="option.description">{{ option.description }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-primary" (click)="applyOptions()">Применить</button>
+      <button type="button" class="btn btn-secondary" (click)="closeOptionsModal()">Отмена</button>
+    </div>
+  </div>
+</div>
+

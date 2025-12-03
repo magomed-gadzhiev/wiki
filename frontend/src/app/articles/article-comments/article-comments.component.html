@@ -1,0 +1,131 @@
+<div class="article-comments" *ngIf="article">
+  <h2>Комментарии</h2>
+  
+  <div *ngIf="error" class="alert alert-danger">{{ error }}</div>
+  
+  <!-- Форма создания нового комментария -->
+  <div class="comment-form" *ngIf="canComment()">
+    <h3>Добавить комментарий</h3>
+    <form [formGroup]="commentForm" (ngSubmit)="submitComment()">
+      <div class="form-group">
+        <quill-editor
+          #mainEditor
+          formControlName="content"
+          [modules]="quillModules"
+          placeholder="Введите ваш комментарий..."
+          [styles]="{ height: '200px' }"
+          (onFocus)="onEditorFocus('main')"
+        ></quill-editor>
+        <div *ngIf="commentForm.get('content')?.invalid && commentForm.get('content')?.touched" class="error-message">
+          Комментарий обязателен
+        </div>
+      </div>
+      
+      <button type="submit" class="btn btn-primary" [disabled]="commentForm.invalid">
+        Отправить комментарий
+      </button>
+    </form>
+  </div>
+  
+  <div *ngIf="!canComment() && article.is_published" class="alert alert-info">
+    Для комментирования необходимо войти в систему и иметь права на чтение или редактирование.
+  </div>
+  
+  <div *ngIf="!article.is_published" class="alert alert-warning">
+    Комментировать можно только опубликованные статьи.
+  </div>
+  
+  <!-- Список комментариев -->
+  <div class="comments-list" *ngIf="!loading && comments.length > 0">
+    <div *ngFor="let comment of comments" [id]="'comment-' + comment.id" class="comment-item" [class.highlighted]="highlightedCommentId === comment.id">
+      <div class="comment-header">
+        <strong>{{ comment.author.username }}</strong>
+        <span class="comment-date">{{ formatDate(comment.created_at) }}</span>
+        <button *ngIf="canComment()" class="btn btn-sm btn-link reference-btn" (click)="referenceComment(comment)">
+          Сослаться
+        </button>
+        <button *ngIf="isCommentAuthor(comment)" class="btn btn-sm btn-danger" (click)="deleteComment(comment)">
+          Удалить
+        </button>
+      </div>
+      
+      <!-- Ссылки на другие комментарии -->
+      <div class="comment-references" *ngIf="comment.referenced_comments && comment.referenced_comments.length > 0">
+        <span class="references-label">Ссылки на:</span>
+        <span *ngFor="let ref of comment.referenced_comments" class="reference-badge">
+          {{ ref.author.username }}
+        </span>
+      </div>
+      
+      <div class="comment-content" [innerHTML]="sanitizeHtml(processCommentContent(comment.content))"></div>
+      
+      <!-- Кнопка ответа -->
+      <button *ngIf="canComment()" class="btn btn-sm btn-link reply-btn" (click)="startReply(comment)">
+        Ответить
+      </button>
+      
+      <!-- Форма ответа -->
+      <div class="reply-form" *ngIf="replyingTo && replyingTo.id === comment.id && replyForm">
+        <form [formGroup]="replyForm" (ngSubmit)="submitReply()">
+          <div class="form-group">
+            <quill-editor
+              #replyEditor
+              formControlName="content"
+              [modules]="quillModules"
+              placeholder="Введите ваш ответ..."
+              [styles]="{ height: '150px' }"
+              (onFocus)="onEditorFocus('reply')"
+            ></quill-editor>
+            <div *ngIf="replyForm.get('content')?.invalid && replyForm.get('content')?.touched" class="error-message">
+              Ответ обязателен
+            </div>
+          </div>
+          
+          <button type="submit" class="btn btn-primary btn-sm" [disabled]="replyForm.invalid">
+            Отправить ответ
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="cancelReply()">
+            Отмена
+          </button>
+        </form>
+      </div>
+      
+      <!-- Вложенные ответы -->
+      <div class="replies" *ngIf="comment.replies && comment.replies.length > 0">
+        <div *ngFor="let reply of comment.replies" [id]="'comment-' + reply.id" class="reply-item" [class.highlighted]="highlightedCommentId === reply.id">
+          <div class="comment-header">
+            <strong>{{ reply.author.username }}</strong>
+            <span class="comment-date">{{ formatDate(reply.created_at) }}</span>
+            <button *ngIf="canComment()" class="btn btn-sm btn-link reference-btn" (click)="referenceComment(reply)">
+              Сослаться
+            </button>
+            <button *ngIf="isCommentAuthor(reply)" class="btn btn-sm btn-danger" (click)="deleteComment(reply)">
+              Удалить
+            </button>
+          </div>
+          
+          <!-- Ссылки на другие комментарии в ответе -->
+          <div class="comment-references" *ngIf="reply.referenced_comments && reply.referenced_comments.length > 0">
+            <span class="references-label">Ссылки на:</span>
+            <span *ngFor="let ref of reply.referenced_comments" class="reference-badge">
+              {{ ref.author.username }}
+            </span>
+          </div>
+          
+          <div class="comment-content" [innerHTML]="sanitizeHtml(processCommentContent(reply.content))"></div>
+          
+          <button *ngIf="canComment()" class="btn btn-sm btn-link reply-btn" (click)="startReply(reply)">
+            Ответить
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div *ngIf="!loading && comments.length === 0" class="no-comments">
+    Пока нет комментариев. Будьте первым!
+  </div>
+  
+  <div *ngIf="loading" class="loading">Загрузка комментариев...</div>
+</div>
+

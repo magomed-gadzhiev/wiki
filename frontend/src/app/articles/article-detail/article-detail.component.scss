@@ -1,0 +1,258 @@
+.article-detail-container {
+  padding: 0;
+  overflow-x: hidden; // Предотвращаем горизонтальную прокрутку
+}
+
+.article-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.hierarchy-link {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.hierarchy-link:hover {
+  text-decoration: underline;
+}
+
+.article-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.article-meta {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #666;
+}
+
+.article-meta a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.article-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.35em 0.65em;
+  font-size: 0.875em;
+  font-weight: 500;
+}
+
+.article-layout {
+  position: relative;
+  width: 100%;
+  overflow-x: hidden; // Предотвращаем горизонтальную прокрутку
+  
+  .row {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+.article-main {
+  padding: 0 15px;
+  width: 100%;
+  box-sizing: border-box;
+  
+  @media (min-width: 768px) {
+    // Отступ слева для фиксированной навигации (16.666667% = 2/12 колонок)
+    // Ширина контента = 100% - 16.666667% (навигация)
+    margin-left: 16.666667%;
+    width: calc(100% - 16.666667%);
+    max-width: calc(100% - 16.666667%);
+    padding-right: 15px;
+  }
+}
+
+.article-sidebar {
+  position: fixed;
+  left: 0;
+  top: 56px; // Высота верхней навигации
+  width: 16.666667%; // Ширина col-2 (2/12 = 16.666667%)
+  max-width: 16.666667%; // Ограничиваем максимальную ширину
+  height: calc(100vh - 56px); // Высота минус верхняя навигация
+  overflow-y: auto;
+  overflow-x: hidden; // Предотвращаем горизонтальную прокрутку
+  z-index: 100;
+  background: #fff;
+  border-right: 1px solid #dee2e6;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  padding: 0;
+  box-sizing: border-box;
+  
+  @media (max-width: 767.98px) {
+    position: relative;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 300px;
+    margin-bottom: 20px;
+    border-right: none;
+    border-bottom: 1px solid #dee2e6;
+    box-shadow: none;
+  }
+}
+
+.article-content {
+  margin-bottom: 30px;
+}
+
+.article-options {
+  margin-top: 30px;
+}
+
+.article-options h2 {
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+.article-options .table {
+  margin-bottom: 0;
+}
+
+.article-options .table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+.option-description {
+  color: #666;
+  font-weight: normal;
+  font-size: 0.9em;
+}
+
+.article-attachments {
+  margin-top: 30px;
+}
+
+.article-attachments h2 {
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+.attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.attachment-item {
+  padding: 15px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+}
+
+.attachment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1.1em;
+}
+
+.attachment-link:hover {
+  text-decoration: underline;
+}
+
+.attachment-icon {
+  font-size: 1.2em;
+}
+
+.attachment-meta {
+  display: flex;
+  gap: 15px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.attachment-comment {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: #ffffff;
+  border-left: 3px solid #007bff;
+  font-size: 0.95em;
+}
+
+.article-content ::ng-deep img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.article-content-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto; // Для таблиц и широкого контента
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+// Стили для заголовков с якорями
+.article-content ::ng-deep h1,
+.article-content ::ng-deep h2,
+.article-content ::ng-deep h3,
+.article-content ::ng-deep h4,
+.article-content ::ng-deep h5,
+.article-content ::ng-deep h6 {
+  scroll-margin-top: 80px; // Отступ для фиксированной навигации
+  position: relative;
+}
+
+.article-content ::ng-deep table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  table-layout: auto;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.article-content ::ng-deep table th,
+.article-content ::ng-deep table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.article-content ::ng-deep table th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+}
+
+.loading, .error {
+  text-align: center;
+  padding: 40px;
+}
+
+.error {
+  color: #dc3545;
+}
+

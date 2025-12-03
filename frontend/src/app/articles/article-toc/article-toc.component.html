@@ -1,0 +1,18 @@
+<nav class="article-toc" *ngIf="tocItems.length > 0">
+  <div class="toc-header">
+    <h3>Содержание</h3>
+  </div>
+  <ul class="toc-list">
+    <li *ngFor="let item of tocItems" [class]="getItemClass(item)">
+      <a (click)="scrollToHeading(item)" [class.active]="activeItemId === item.id">
+        {{ item.text }}
+      </a>
+    </li>
+    <li [class]="getCommentsClass()">
+      <a (click)="scrollToComments()">
+        Комментарии
+      </a>
+    </li>
+  </ul>
+</nav>
+

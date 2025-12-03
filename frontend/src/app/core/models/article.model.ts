@@ -1,42 +1,33 @@
 import { User } from './user.model';
 
-export interface SectionSimple {
+export interface TechnologySimple {
   id: string;
   name: string;
-  slug: string;
-  description: string;
   sort_order: number;
   created_at: string;
 }
 
-export interface CategorySimple {
+export interface ElementSimple {
   id: string;
   name: string;
-  slug: string;
-  description: string;
   sort_order: number;
   created_at: string;
 }
 
-export interface Section {
+export interface Technology {
   id: string;
   name: string;
-  slug: string;
-  description: string;
   sort_order: number;
   created_at: string;
-  categories: CategorySimple[];
+  elements: ElementSimple[];
 }
 
-export interface Category {
+export interface Element {
   id: string;
   name: string;
-  slug: string;
-  description: string;
-  section?: SectionSimple | null;
+  technology?: TechnologySimple | null;
   sort_order: number;
   created_at: string;
-  user_permission_level?: 'none' | 'read' | 'full' | null;
 }
 
 export interface Tag {
@@ -48,10 +39,10 @@ export interface Tag {
 
 export interface Article {
   id: string;
-  title: string;
+  model_name: string;
   content: string;
   summary: string;
-  category?: Category | null;
+  element?: Element | null;
   tags: Tag[];
   author: User;
   created_at: string;
@@ -71,7 +62,7 @@ export interface Article {
 export interface ArticleVersion {
   id: string;
   article: string;
-  title: string;
+  model_name: string;
   content: string;
   summary: string;
   version_number: number;
@@ -117,5 +108,13 @@ export interface ArticleOptionValue {
   value: string;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface ArticleTemplate {
+  id: string;
+  name: string;
+  html: string;
+  created_at: string;
+  updated_at: string;
 }
 

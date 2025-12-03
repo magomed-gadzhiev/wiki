@@ -1,0 +1,17 @@
+<header class="header">
+  <div class="container-fluid">
+    <div class="header-content">
+      <h1 class="logo">
+        <a routerLink="/">Mikron Wiki</a>
+      </h1>
+      <div class="user-menu" *ngIf="isAuthenticated(); else loginBlock">
+        <span class="username">{{ currentUser()?.username }}</span>
+        <button class="btn btn-secondary" (click)="logout()">Выход</button>
+      </div>
+      <ng-template #loginBlock>
+        <a routerLink="/login" class="btn btn-primary">Вход</a>
+      </ng-template>
+    </div>
+  </div>
+</header>
+

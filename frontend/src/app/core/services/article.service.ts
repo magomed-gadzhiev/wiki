@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Section, Tag, ArticleOption, ArticleOptionValue } from '../models/article.model';
+import { Article, ArticleVersion, ArticleImage, ArticleAttachment, Element, Technology, Tag, ArticleOption, ArticleOptionValue, ArticleTemplate } from '../models/article.model';
 
 @Injectable({
   providedIn: 'root'
@@ -16,7 +16,7 @@ export class ArticleService {
     search?: string; 
     author?: number; 
     is_published?: boolean;
-    category?: string;
+    element?: string;
     tags?: string[];
     optionFilters?: { option_id: string; option_value: string }[];
   }): Observable<{ results: Article[]; count: number }> {
@@ -30,8 +30,8 @@ export class ArticleService {
     if (params?.is_published !== undefined) {
       httpParams = httpParams.set('is_published', params.is_published.toString());
     }
-    if (params?.category) {
-      httpParams = httpParams.set('category', params.category);
+    if (params?.element) {
+      httpParams = httpParams.set('element', params.element);
     }
     // Фильтр по тегам
     if (params?.tags && params.tags.length > 0) {
@@ -99,14 +99,14 @@ export class ArticleService {
     return this.http.post<{ content: string; warnings: string[] }>(`${this.apiUrl}/import_word/`, formData);
   }
 
-  getCategories(): Observable<Category[]> {
-    return this.http.get<{ results: Category[]; count: number } | Category[]>(`${this.apiUrl}/categories/`).pipe(
+  getElements(): Observable<Element[]> {
+    return this.http.get<{ results: Element[]; count: number } | Element[]>(`${this.apiUrl}/elements/`).pipe(
       map(response => Array.isArray(response) ? response : response.results)
     );
   }
 
-  getSections(): Observable<Section[]> {
-    return this.http.get<{ results: Section[]; count: number } | Section[]>(`${this.apiUrl}/sections/`).pipe(
+  getTechnologies(): Observable<Technology[]> {
+    return this.http.get<{ results: Technology[]; count: number } | Technology[]>(`${this.apiUrl}/technologies/`).pipe(
       map(response => Array.isArray(response) ? response : response.results)
     );
   }
@@ -129,6 +129,20 @@ export class ArticleService {
     return this.http.get<{ results: ArticleOption[]; count: number } | ArticleOption[]>(`${this.apiUrl}/options/`).pipe(
       map(response => Array.isArray(response) ? response : response.results)
     );
+  }
+
+  getTemplates(): Observable<ArticleTemplate[]> {
+    return this.http.get<{ results: ArticleTemplate[]; count: number } | ArticleTemplate[]>(`${this.apiUrl}/templates/`).pipe(
+      map(response => Array.isArray(response) ? response : response.results)
+    );
+  }
+
+  publishArticle(id: string): Observable<Article> {
+    return this.http.post<Article>(`${this.apiUrl}/${id}/publish/`, {});
+  }
+
+  unpublishArticle(id: string): Observable<Article> {
+    return this.http.post<Article>(`${this.apiUrl}/${id}/unpublish/`, {});
   }
 }
 

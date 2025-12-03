@@ -5,230 +5,28 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ArticleService } from '../../core/services/article.service';
 import { Article } from '../../core/models/article.model';
 import { AuthService } from '../../core/services/auth.service';
+import { ArticleCommentsComponent } from '../article-comments/article-comments.component';
+import { ArticleTocComponent } from '../article-toc/article-toc.component';
 
 @Component({
   selector: 'app-article-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule],
-  template: `
-    <div class="container" *ngIf="article">
-      <div class="article-header">
-        <h1>{{ article.title }}</h1>
-        <div class="article-actions" *ngIf="canEdit()">
-          <a [routerLink]="['/articles', article.id, 'edit']" class="btn btn-primary">Редактировать</a>
-          <button *ngIf="canDelete()" class="btn btn-danger" (click)="deleteArticle()">Удалить</button>
-        </div>
-      </div>
-      
-      <div class="article-tags" *ngIf="article.tags && article.tags.length > 0">
-        <span *ngFor="let tag of article.tags" class="badge bg-primary tag-badge">{{ tag.name }}</span>
-      </div>
-      
-      <div class="article-meta">
-        <span>Автор: {{ article.author.username }}</span>
-        <span *ngIf="article.category">Категория: {{ article.category.name }}</span>
-        <span>Создано: {{ article.created_at | date:'dd.MM.yyyy, HH:mm' }}</span>
-        <span>Обновлено: {{ article.updated_at | date:'dd.MM.yyyy, HH:mm' }}</span>
-        <span>Просмотров: {{ article.view_count }}</span>
-        <a *ngIf="isAuthenticated() && canViewVersions()" [routerLink]="['/articles', article.id, 'versions']">История версий</a>
-      </div>
-      
-      <div class="card article-content">
-        <div #articleContent class="article-content-wrapper" [innerHTML]="sanitizedContent"></div>
-      </div>
-      
-      <div class="card article-options" *ngIf="article.option_values && article.option_values.length > 0">
-        <h2>Опции статьи</h2>
-        <table class="table table-bordered">
-          <thead>
-            <tr>
-              <th>Опция</th>
-              <th>Значение</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let optionValue of article.option_values">
-              <td>
-                <strong>{{ optionValue.option.name }}</strong>
-                <span *ngIf="optionValue.option.description" class="option-description"> - {{ optionValue.option.description }}</span>
-              </td>
-              <td>{{ optionValue.value }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      
-      <div class="card article-attachments" *ngIf="article.attachments && article.attachments.length > 0">
-        <h2>Вложения</h2>
-        <div class="attachments-list">
-          <div class="attachment-item" *ngFor="let attachment of article.attachments">
-            <div class="attachment-info">
-              <a [href]="attachment.file_url" target="_blank" class="attachment-link">
-                <span class="attachment-icon">📎</span>
-                <span class="attachment-filename">{{ attachment.filename }}</span>
-              </a>
-              <div class="attachment-meta">
-                <span class="attachment-size">{{ attachment.file_size_display }}</span>
-                <span class="attachment-date">{{ attachment.uploaded_at | date:'dd.MM.yyyy, HH:mm' }}</span>
-                <span class="attachment-uploader">Загрузил: {{ attachment.uploaded_by_username }}</span>
-              </div>
-              <div class="attachment-comment" *ngIf="attachment.comment">
-                <strong>Комментарий:</strong> {{ attachment.comment }}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <div *ngIf="loading" class="loading">Загрузка...</div>
-    <div *ngIf="error" class="error">{{ error }}</div>
-  `,
-  styles: [`
-    .article-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-    .article-actions {
-      display: flex;
-      gap: 10px;
-    }
-    .article-meta {
-      display: flex;
-      gap: 20px;
-      margin-bottom: 20px;
-      font-size: 14px;
-      color: #666;
-    }
-    .article-meta a {
-      color: #007bff;
-      text-decoration: none;
-    }
-    .article-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 20px;
-    }
-    .tag-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 0.35em 0.65em;
-      font-size: 0.875em;
-      font-weight: 500;
-    }
-    .article-content {
-      margin-bottom: 30px;
-    }
-    .article-options {
-      margin-top: 30px;
-    }
-    .article-options h2 {
-      margin-bottom: 20px;
-      font-size: 1.5rem;
-    }
-    .article-options .table {
-      margin-bottom: 0;
-    }
-    .article-options .table th {
-      background-color: #f8f9fa;
-      font-weight: 600;
-    }
-    .option-description {
-      color: #666;
-      font-weight: normal;
-      font-size: 0.9em;
-    }
-    .article-attachments {
-      margin-top: 30px;
-    }
-    .article-attachments h2 {
-      margin-bottom: 20px;
-      font-size: 1.5rem;
-    }
-    .attachments-list {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-    }
-    .attachment-item {
-      padding: 15px;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
-      background-color: #f8f9fa;
-    }
-    .attachment-info {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .attachment-link {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #007bff;
-      text-decoration: none;
-      font-weight: 500;
-      font-size: 1.1em;
-    }
-    .attachment-link:hover {
-      text-decoration: underline;
-    }
-    .attachment-icon {
-      font-size: 1.2em;
-    }
-    .attachment-meta {
-      display: flex;
-      gap: 15px;
-      font-size: 0.9em;
-      color: #666;
-    }
-    .attachment-comment {
-      margin-top: 8px;
-      padding: 8px;
-      background-color: #ffffff;
-      border-left: 3px solid #007bff;
-      font-size: 0.95em;
-    }
-    .article-content ::ng-deep img {
-      max-width: 100%;
-      height: auto;
-    }
-    .article-content ::ng-deep table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 20px 0;
-    }
-    .article-content ::ng-deep table th,
-    .article-content ::ng-deep table td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: left;
-    }
-    .article-content ::ng-deep table th {
-      background-color: #f5f5f5;
-      font-weight: bold;
-    }
-    .loading, .error {
-      text-align: center;
-      padding: 40px;
-    }
-    .error {
-      color: #dc3545;
-    }
-  `]
+  imports: [CommonModule, RouterModule, ArticleCommentsComponent, ArticleTocComponent],
+  templateUrl: './article-detail.component.html',
+  styleUrls: ['./article-detail.component.scss']
 })
 export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild('articleContent', { static: false }) articleContent!: ElementRef;
+  @ViewChild('articleContent', { static: false }) articleContent!: ElementRef<HTMLDivElement>;
   
   article: Article | null = null;
   loading = false;
   error: string | null = null;
   sanitizedContent: SafeHtml = '';
   private styleElement: HTMLStyleElement | null = null;
+
+  get contentElement(): HTMLElement | null {
+    return this.articleContent?.nativeElement || null;
+  }
 
   constructor(
     private route: ActivatedRoute,
@@ -259,6 +57,13 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
           }
         }
       }, 100);
+    }
+    
+    // Добавляем ID к заголовкам после рендеринга
+    if (this.articleContent) {
+      setTimeout(() => {
+        this.addIdsToHeadingsInDOM();
+      }, 200);
     }
   }
 
@@ -294,13 +99,7 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
       return true;
     }
     
-    // Проверяем права на категорию
-    if (this.article.category && this.article.category.user_permission_level) {
-      // Только полные права (full) дают доступ к версиям
-      return this.article.category.user_permission_level === 'full';
-    }
-    
-    // Если нет категории или нет прав через группы, проверяем индивидуальные права
+    // Права проверяются на уровне API, здесь просто проверяем индивидуальные права
     // Если есть права на редактирование, значит можно просматривать версии
     return this.article.can_edit.some(u => u.id === user.id);
   }
@@ -314,6 +113,11 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
         this.article = article;
         this.processArticleContent(article.content);
         this.loading = false;
+        
+        // Добавляем ID к заголовкам после загрузки контента
+        setTimeout(() => {
+          this.addIdsToHeadingsInDOM();
+        }, 300);
       },
       error: (err) => {
         this.error = err.error?.error || 'Ошибка загрузки статьи';
@@ -335,7 +139,10 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
     }
     
     // Убираем теги style из HTML для отображения
-    const htmlWithoutStyles = content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').trim();
+    let htmlWithoutStyles = content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').trim();
+    
+    // Добавляем ID к заголовкам для навигации
+    htmlWithoutStyles = this.addIdsToHeadings(htmlWithoutStyles);
     
     // Используем DomSanitizer для безопасного встраивания HTML
     this.sanitizedContent = this.sanitizer.bypassSecurityTrustHtml(htmlWithoutStyles);
@@ -347,6 +154,30 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
         this.addArticleStyles(cssText);
       }, 50);
     }
+  }
+
+  addIdsToHeadings(html: string): string {
+    // Просто возвращаем HTML как есть, ID будут добавлены в DOM
+    return html;
+  }
+
+  addIdsToHeadingsInDOM(): void {
+    if (!this.articleContent?.nativeElement) return;
+    
+    const headings = this.articleContent.nativeElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    let index = 0;
+    
+    headings.forEach((heading) => {
+      const htmlHeading = heading as HTMLElement;
+      if (!htmlHeading.id) {
+        const text = htmlHeading.textContent?.trim() || '';
+        if (text) {
+          const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9а-яё]+/g, '-').replace(/^-|-$/g, '').substring(0, 50)}`;
+          htmlHeading.id = id;
+          index++;
+        }
+      }
+    });
   }
 
   addArticleStyles(cssText: string): void {

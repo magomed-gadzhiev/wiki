@@ -1,0 +1,98 @@
+<div class="container-fluid article-detail-container" *ngIf="article">
+  <div class="article-layout">
+    <aside class="article-sidebar" *ngIf="contentElement">
+      <app-article-toc 
+        [contentElement]="contentElement" 
+        commentsElementId="article-comments">
+      </app-article-toc>
+    </aside>
+    
+    <div class="row">
+      <div class="col-12 article-main">
+        <div class="article-header">
+          <h1>
+            <span *ngIf="article.element?.technology">
+              <a [routerLink]="['/technologies', article.element?.technology?.id]" class="hierarchy-link">{{ article.element?.technology?.name }}</a> / 
+            </span>
+            <span *ngIf="article.element">
+              <a [routerLink]="['/elements', article.element.id]" class="hierarchy-link">{{ article.element.name }}</a> / 
+            </span>
+            <span>{{ article.model_name }}</span>
+          </h1>
+          <div class="article-actions" *ngIf="canEdit()">
+            <a [routerLink]="['/articles', article.id, 'edit']" class="btn btn-primary">Редактировать</a>
+            <button *ngIf="canDelete()" class="btn btn-danger" (click)="deleteArticle()">Удалить</button>
+          </div>
+        </div>
+        
+        <div class="article-tags" *ngIf="article.tags && article.tags.length > 0">
+          <span *ngFor="let tag of article.tags" class="badge bg-primary tag-badge">{{ tag.name }}</span>
+        </div>
+        
+        <div class="article-meta">
+          <span>Автор: {{ article.author.username }}</span>
+          <span *ngIf="article.element">Элемент: {{ article.element.name }}</span>
+          <span>Создано: {{ article.created_at | date:'dd.MM.yyyy, HH:mm' }}</span>
+          <span>Обновлено: {{ article.updated_at | date:'dd.MM.yyyy, HH:mm' }}</span>
+          <span>Просмотров: {{ article.view_count }}</span>
+          <a *ngIf="isAuthenticated() && canViewVersions()" [routerLink]="['/articles', article.id, 'versions']">История версий</a>
+        </div>
+      <div class="card article-content">
+        <div #articleContent class="article-content-wrapper" [innerHTML]="sanitizedContent"></div>
+      </div>
+      
+      <div class="card article-options" *ngIf="article.option_values && article.option_values.length > 0">
+        <h2>Опции статьи</h2>
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>Опция</th>
+              <th>Значение</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let optionValue of article.option_values">
+              <td>
+                <strong>{{ optionValue.option.name }}</strong>
+                <span *ngIf="optionValue.option.description" class="option-description"> - {{ optionValue.option.description }}</span>
+              </td>
+              <td>{{ optionValue.value }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="card article-attachments" *ngIf="article.attachments && article.attachments.length > 0">
+        <h2>Вложения</h2>
+        <div class="attachments-list">
+          <div class="attachment-item" *ngFor="let attachment of article.attachments">
+            <div class="attachment-info">
+              <a [href]="attachment.file_url" target="_blank" class="attachment-link">
+                <span class="attachment-icon">📎</span>
+                <span class="attachment-filename">{{ attachment.filename }}</span>
+              </a>
+              <div class="attachment-meta">
+                <span class="attachment-size">{{ attachment.file_size_display }}</span>
+                <span class="attachment-date">{{ attachment.uploaded_at | date:'dd.MM.yyyy, HH:mm' }}</span>
+                <span class="attachment-uploader">Загрузил: {{ attachment.uploaded_by_username }}</span>
+              </div>
+              <div class="attachment-comment" *ngIf="attachment.comment">
+                <strong>Комментарий:</strong> {{ attachment.comment }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Комментарии -->
+      <div id="article-comments">
+        <app-article-comments [article]="article"></app-article-comments>
+      </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="loading" class="loading">Загрузка...</div>
+<div *ngIf="error" class="error">{{ error }}</div>
+

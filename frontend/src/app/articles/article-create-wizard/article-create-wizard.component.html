@@ -1,0 +1,275 @@
+<div class="container-fluid">
+  <h1>Создание новой статьи</h1>
+  
+  <div class="wizard-container">
+    <!-- Прогресс-бар -->
+    <div class="wizard-progress">
+      <div class="progress-steps">
+        <div *ngFor="let step of [1,2,3,4,5,6,7]; let i = index" 
+             class="step" 
+             [class.active]="currentStep === step"
+             [class.completed]="currentStep > step">
+          <div class="step-number">{{ step }}</div>
+          <div class="step-label">
+            <span *ngIf="step === 1">Технология</span>
+            <span *ngIf="step === 2">Элемент</span>
+            <span *ngIf="step === 3">Модель</span>
+            <span *ngIf="step === 4">Опции</span>
+            <span *ngIf="step === 5">Описание</span>
+            <span *ngIf="step === 6">Теги</span>
+            <span *ngIf="step === 7">Шаблон</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Форма -->
+    <form [formGroup]="articleForm" (ngSubmit)="onSubmit()">
+      <div class="wizard-content">
+        <!-- Шаг 1: Выбор технологии -->
+        <div *ngIf="currentStep === 1" class="wizard-step">
+          <h2>Шаг 1: Выбор технологии</h2>
+          <div class="form-group">
+            <label for="technology_id">Технология *</label>
+            <select 
+              id="technology_id" 
+              formControlName="technology_id"
+              [class.error]="articleForm.get('technology_id')?.invalid && articleForm.get('technology_id')?.touched"
+            >
+              <option [ngValue]="null">-- Выберите технологию --</option>
+              <option *ngFor="let tech of technologies" [ngValue]="tech.id">
+                {{ tech.name }}
+              </option>
+            </select>
+            <div *ngIf="articleForm.get('technology_id')?.invalid && articleForm.get('technology_id')?.touched" class="error-message">
+              Технология обязательна
+            </div>
+          </div>
+        </div>
+        
+        <!-- Шаг 2: Выбор элемента -->
+        <div *ngIf="currentStep === 2" class="wizard-step">
+          <h2>Шаг 2: Выбор элемента</h2>
+          <div class="form-group">
+            <label for="element_id">Элемент *</label>
+            <select 
+              id="element_id" 
+              formControlName="element_id"
+              [class.error]="articleForm.get('element_id')?.invalid && articleForm.get('element_id')?.touched"
+              [disabled]="!selectedTechnology || availableElements.length === 0"
+            >
+              <option [ngValue]="null">-- Выберите элемент --</option>
+              <option *ngFor="let element of availableElements" [ngValue]="element.id">
+                {{ element.name }}
+              </option>
+            </select>
+            <div *ngIf="!selectedTechnology" class="info-message">
+              Сначала выберите технологию на предыдущем шаге
+            </div>
+            <div *ngIf="selectedTechnology && availableElements.length === 0" class="info-message">
+              У выбранной технологии нет элементов
+            </div>
+            <div *ngIf="articleForm.get('element_id')?.invalid && articleForm.get('element_id')?.touched" class="error-message">
+              Элемент обязателен
+            </div>
+          </div>
+        </div>
+        
+        <!-- Шаг 3: Название модели -->
+        <div *ngIf="currentStep === 3" class="wizard-step">
+          <h2>Шаг 3: Название модели</h2>
+          <div class="form-group">
+            <label for="model_name">Название модели *</label>
+            <input 
+              id="model_name" 
+              type="text" 
+              formControlName="model_name"
+              [class.error]="articleForm.get('model_name')?.invalid && articleForm.get('model_name')?.touched"
+              placeholder="Введите название модели"
+            />
+            <div *ngIf="articleForm.get('model_name')?.invalid && articleForm.get('model_name')?.touched" class="error-message">
+              Название модели обязательно
+            </div>
+          </div>
+        </div>
+        
+        <!-- Шаг 4: Опции -->
+        <div *ngIf="currentStep === 4" class="wizard-step">
+          <h2>Шаг 4: Опции статьи</h2>
+          <div class="form-group">
+            <div class="options-table-container">
+              <table class="table table-bordered options-table">
+                <thead>
+                  <tr>
+                    <th style="width: 40%;">Опция</th>
+                    <th style="width: 50%;">Значение</th>
+                    <th style="width: 10%;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let optionValue of optionValuesList; let i = index">
+                    <td>
+                      <select 
+                        [(ngModel)]="optionValue.option_id"
+                        [ngModelOptions]="{standalone: true}"
+                        class="form-control form-control-sm"
+                      >
+                        <option [ngValue]="null">-- Выберите опцию --</option>
+                        <option *ngFor="let option of getAvailableOptions(optionValue.option_id, i)" [ngValue]="option.id">
+                          {{ option.name }}
+                          <span *ngIf="option.description"> - {{ option.description }}</span>
+                        </option>
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        [(ngModel)]="optionValue.value"
+                        [ngModelOptions]="{standalone: true}"
+                        class="form-control form-control-sm"
+                        placeholder="Введите значение"
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-danger"
+                        (click)="removeOptionValue(i)"
+                        title="Удалить"
+                      >
+                        ×
+                      </button>
+                    </td>
+                  </tr>
+                  <tr *ngIf="optionValuesList.length === 0">
+                    <td colspan="3" class="text-center text-muted">
+                      Нет добавленных опций
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <button
+                type="button"
+                class="btn btn-sm btn-primary add-option-btn"
+                (click)="addOptionValue()"
+              >
+                + Добавить опцию
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Шаг 5: Описание -->
+        <div *ngIf="currentStep === 5" class="wizard-step">
+          <h2>Шаг 5: Описание</h2>
+          <div class="form-group">
+            <label for="summary">Краткое описание</label>
+            <textarea 
+              id="summary" 
+              formControlName="summary"
+              rows="5"
+              placeholder="Введите краткое описание статьи (необязательно)"
+            ></textarea>
+          </div>
+        </div>
+        
+        <!-- Шаг 6: Теги -->
+        <div *ngIf="currentStep === 6" class="wizard-step">
+          <h2>Шаг 6: Теги</h2>
+          <div class="form-group">
+            <label for="tags">Теги</label>
+            <div class="tags-container">
+              <div class="tags-input-wrapper">
+                <input 
+                  type="text" 
+                  id="tag-input"
+                  [(ngModel)]="newTagName"
+                  (keydown.enter)="addNewTag($event)"
+                  (keydown.arrowdown)="navigateSuggestions($event, 1)"
+                  (keydown.arrowup)="navigateSuggestions($event, -1)"
+                  (keydown.escape)="hideSuggestions()"
+                  (input)="searchTags($event)"
+                  (focus)="onTagInputFocus()"
+                  (blur)="onTagInputBlur()"
+                  placeholder="Введите название тега или выберите из списка"
+                  class="tag-input"
+                  [ngModelOptions]="{standalone: true}"
+                />
+                <div class="tags-suggestions" *ngIf="tagSuggestions.length > 0 && showTagSuggestions" (mousedown)="$event.preventDefault()">
+                  <div 
+                    *ngFor="let tag of tagSuggestions; let i = index" 
+                    class="tag-suggestion"
+                    [class.selected]="i === selectedSuggestionIndex"
+                    (click)="selectTag(tag)"
+                    (mouseenter)="selectedSuggestionIndex = i"
+                  >
+                    <span class="tag-suggestion-icon">🏷️</span>
+                    <span class="tag-suggestion-name">{{ tag.name }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="selected-tags" *ngIf="selectedTags.length > 0">
+                <span 
+                  *ngFor="let tag of selectedTags" 
+                  class="badge bg-primary tag-badge"
+                >
+                  {{ tag.name }}
+                  <button type="button" class="tag-remove" (click)="removeTag(tag)">×</button>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Шаг 7: Выбор шаблона -->
+        <div *ngIf="currentStep === 7" class="wizard-step">
+          <h2>Шаг 7: Выбор шаблона</h2>
+          <div class="form-group">
+            <label for="template_id">Шаблон статьи</label>
+            <select 
+              id="template_id" 
+              formControlName="template_id"
+            >
+              <option [ngValue]="null">-- Без шаблона (пустая статья) --</option>
+              <option *ngFor="let template of templates" [ngValue]="template.id">
+                {{ template.name }}
+              </option>
+            </select>
+            <div class="info-message" style="margin-top: 10px;">
+              Вы можете выбрать шаблон для начального содержимого статьи. После создания статьи вы сможете редактировать содержимое с помощью визуального редактора.
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Навигация -->
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-secondary" (click)="prevStep()" [disabled]="currentStep === 1">
+          Назад
+        </button>
+        <button type="button" class="btn btn-secondary" (click)="cancel()">
+          Отмена
+        </button>
+        <button 
+          *ngIf="currentStep < totalSteps" 
+          type="button" 
+          class="btn btn-primary" 
+          (click)="nextStep()"
+        >
+          Далее
+        </button>
+        <button 
+          *ngIf="currentStep === totalSteps" 
+          type="submit" 
+          class="btn btn-primary" 
+          [disabled]="articleForm.invalid || saving"
+        >
+          {{ saving ? 'Создание...' : 'Создать статью' }}
+        </button>
+      </div>
+      
+      <div *ngIf="error" class="error-message">{{ error }}</div>
+    </form>
+  </div>
+</div>
+

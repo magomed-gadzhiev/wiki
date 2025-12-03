@@ -1,0 +1,135 @@
+.article-toc {
+  height: 100%;
+  overflow-y: auto;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 15px;
+  margin: 0;
+  
+  @media (max-width: 767.98px) {
+    max-height: 300px;
+    margin-bottom: 0;
+  }
+}
+
+.toc-header {
+  margin-bottom: 15px;
+  
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333;
+  }
+}
+
+.toc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.toc-item {
+  margin-bottom: 8px;
+  
+  a {
+    display: block;
+    color: #495057;
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    
+    &:hover {
+      background-color: #e9ecef;
+      color: #007bff;
+    }
+    
+    &.active {
+      background-color: #007bff;
+      color: #fff;
+      font-weight: 500;
+    }
+  }
+  
+  &.toc-level-1 {
+    a {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+  }
+  
+  &.toc-level-2 {
+    padding-left: 15px;
+  }
+  
+  &.toc-level-3 {
+    padding-left: 30px;
+    font-size: 0.85rem;
+  }
+  
+  &.toc-level-4 {
+    padding-left: 45px;
+    font-size: 0.85rem;
+  }
+  
+  &.toc-level-5 {
+    padding-left: 60px;
+    font-size: 0.8rem;
+  }
+  
+  &.toc-level-6 {
+    padding-left: 75px;
+    font-size: 0.8rem;
+  }
+  
+  &.toc-comments {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #dee2e6;
+    
+    a {
+      font-weight: 500;
+      color: #007bff;
+      
+      &:hover {
+        background-color: #e7f3ff;
+      }
+      
+      &.active {
+        background-color: #007bff;
+        color: #fff;
+      }
+    }
+  }
+}
+
+// Стиль для подсветки заголовка при клике
+::ng-deep .toc-highlight {
+  background-color: rgba(0, 123, 255, 0.1) !important;
+  transition: background-color 2s ease;
+}
+
+// Скроллбар для навигации
+.article-toc::-webkit-scrollbar {
+  width: 6px;
+}
+
+.article-toc::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.article-toc::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+  
+  &:hover {
+    background: #555;
+  }
+}
+

@@ -1,0 +1,71 @@
+<nav class="navbar navbar-expand-lg navbar-light bg-light top-navbar">
+  <div class="container-fluid">
+    <a class="navbar-brand" routerLink="/">Mikron Wiki</a>
+  
+    <div class="collapse navbar-collapse" id="navbarTogglerDemo01">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a 
+            class="nav-link" 
+            [routerLink]="['/articles']" 
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{exact: false}"
+            [attr.aria-current]="isActiveRoute('/articles') ? 'page' : null"
+          >
+            Все статьи
+          </a>
+        </li>
+        <li *ngFor="let technology of technologies" class="nav-item dropdown">
+          <a 
+            class="nav-link dropdown-toggle" 
+            href="#"
+            role="button"
+            (click)="toggleTechnology(technology.id); $event.preventDefault()"
+            [attr.aria-expanded]="isTechnologyExpanded(technology.id)"
+            [attr.data-bs-toggle]="'dropdown'"
+          >
+            {{ technology.name }}
+          </a>
+          <ul 
+            class="dropdown-menu"
+            [class.show]="isTechnologyExpanded(technology.id)"
+            (click)="$event.stopPropagation()"
+          >
+            <li 
+              *ngFor="let element of technology.elements"
+            >
+              <a 
+                class="dropdown-item"
+                [routerLink]="['/elements', element.id]" 
+                routerLinkActive="active"
+                (click)="closeDropdown(technology.id)"
+              >
+                {{ element.name }}
+              </a>
+            </li>
+          </ul>
+        </li>
+        <li *ngFor="let element of elementsWithoutTechnology" class="nav-item">
+          <a 
+            class="nav-link"
+            [routerLink]="['/elements', element.id]" 
+            routerLinkActive="active"
+            [attr.aria-current]="isElementActive(element.id) ? 'page' : null"
+          >
+            {{ element.name }}
+          </a>
+        </li>
+      </ul>
+      <div class="d-flex">
+        <div class="user-menu" *ngIf="isAuthenticated(); else loginBlock">
+          <span class="username me-2">{{ currentUser()?.username }}</span>
+          <button class="btn btn-secondary" (click)="logout()">Выход</button>
+        </div>
+        <ng-template #loginBlock>
+          <a routerLink="/login" class="btn btn-primary">Вход</a>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+</nav>
+

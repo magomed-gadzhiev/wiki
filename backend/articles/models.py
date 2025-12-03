@@ -6,18 +6,16 @@ User = get_user_model()
 import uuid
 
 
-class Section(models.Model):
-    """Модель раздела для категорий"""
+class Technology(models.Model):
+    """Модель технологии"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255, verbose_name='Название')
-    slug = models.SlugField(max_length=255, unique=True, blank=True, verbose_name='URL')
-    description = models.TextField(blank=True, verbose_name='Описание')
     sort_order = models.IntegerField(default=0, verbose_name='Порядок сортировки')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
     
     class Meta:
-        verbose_name = 'Раздел'
-        verbose_name_plural = 'Разделы'
+        verbose_name = 'Технология'
+        verbose_name_plural = 'Технологии'
         ordering = ['sort_order', 'name']
         indexes = [
             models.Index(fields=['sort_order', 'name']),
@@ -25,42 +23,26 @@ class Section(models.Model):
     
     def __str__(self):
         return self.name
-    
-    def save(self, *args, **kwargs):
-        # Автоматическое создание slug из названия, если не указан
-        if not self.slug:
-            from django.utils.text import slugify
-            self.slug = slugify(self.name)
-        super().save(*args, **kwargs)
 
 
-class Category(models.Model):
-    """Модель категории статей"""
+class Element(models.Model):
+    """Модель элемента"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255, verbose_name='Название')
-    slug = models.SlugField(max_length=255, unique=True, blank=True, verbose_name='URL')
-    description = models.TextField(blank=True, verbose_name='Описание')
-    section = models.ForeignKey(Section, on_delete=models.SET_NULL, null=True, blank=True, related_name='categories', verbose_name='Раздел')
+    technology = models.ForeignKey(Technology, on_delete=models.SET_NULL, null=True, blank=True, related_name='elements', verbose_name='Технология')
     sort_order = models.IntegerField(default=0, verbose_name='Порядок сортировки')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
     
     class Meta:
-        verbose_name = 'Категория'
-        verbose_name_plural = 'Категории'
-        ordering = ['section', 'sort_order', 'name']
+        verbose_name = 'Элемент'
+        verbose_name_plural = 'Элементы'
+        ordering = ['technology', 'sort_order', 'name']
         indexes = [
-            models.Index(fields=['section', 'sort_order', 'name']),
+            models.Index(fields=['technology', 'sort_order', 'name']),
         ]
     
     def __str__(self):
         return self.name
-    
-    def save(self, *args, **kwargs):
-        # Автоматическое создание slug из названия, если не указан
-        if not self.slug:
-            from django.utils.text import slugify
-            self.slug = slugify(self.name)
-        super().save(*args, **kwargs)
 
 
 class Tag(models.Model):
@@ -106,10 +88,10 @@ class Tag(models.Model):
 class Article(models.Model):
     """Модель статьи вики"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=255, verbose_name='Заголовок')
-    content = models.TextField(verbose_name='Содержимое (HTML)')
+    model_name = models.CharField(max_length=255, verbose_name='Модель')
+    content = models.TextField(blank=True, default='', verbose_name='Содержимое (HTML)')
     summary = models.TextField(blank=True, verbose_name='Краткое описание')
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='articles', verbose_name='Категория')
+    element = models.ForeignKey('Element', on_delete=models.SET_NULL, null=True, blank=True, related_name='articles', verbose_name='Элемент')
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='articles', verbose_name='Автор')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлено')
@@ -135,14 +117,14 @@ class Article(models.Model):
         ]
 
     def __str__(self):
-        return self.title
+        return self.model_name
 
 
 class ArticleVersion(models.Model):
     """Модель версии статьи для версионирования"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='versions', verbose_name='Статья')
-    title = models.CharField(max_length=255, verbose_name='Заголовок')
+    model_name = models.CharField(max_length=255, verbose_name='Модель')
     content = models.TextField(verbose_name='Содержимое (HTML)')
     summary = models.TextField(blank=True, verbose_name='Краткое описание')
     version_number = models.IntegerField(verbose_name='Номер версии')
@@ -160,7 +142,7 @@ class ArticleVersion(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.article.title} - версия {self.version_number}"
+        return f"{self.article.model_name} - версия {self.version_number}"
 
 
 class ArticleImage(models.Model):
@@ -178,7 +160,7 @@ class ArticleImage(models.Model):
         ordering = ['-uploaded_at']
 
     def __str__(self):
-        return f"{self.article.title} - {self.image.name}"
+        return f"{self.article.model_name} - {self.image.name}"
 
 
 class ArticleAttachment(models.Model):
@@ -201,7 +183,7 @@ class ArticleAttachment(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.article.title} - {self.filename}"
+        return f"{self.article.model_name} - {self.filename}"
     
     def save(self, *args, **kwargs):
         # Автоматически сохраняем имя файла и размер при сохранении
@@ -251,20 +233,21 @@ class ArticleOptionValue(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.article.title} - {self.option.name}: {self.value[:50]}"
+        return f"{self.article.model_name} - {self.option.name}: {self.value[:50]}"
 
 
 class Group(models.Model):
     """Модель группы пользователей"""
     PERMISSION_LEVELS = [
         ('none', 'Нет доступа'),
-        ('read', 'Только чтение'),
-        ('full', 'Полные права'),
+        ('read', 'Чтение'),
+        ('edit', 'Редактирование'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255, unique=True, verbose_name='Название группы')
     description = models.TextField(blank=True, verbose_name='Описание')
+    system_permission_level = models.CharField(max_length=10, choices=PERMISSION_LEVELS, default='none', verbose_name='Уровень доступа к системе')
     users = models.ManyToManyField(User, related_name='article_groups', blank=True, verbose_name='Пользователи')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлено')
@@ -281,31 +264,50 @@ class Group(models.Model):
         return self.name
 
 
-class CategoryPermission(models.Model):
-    """Модель прав группы на категорию статей"""
-    PERMISSION_LEVELS = [
-        ('none', 'Нет доступа'),
-        ('read', 'Только чтение'),
-        ('full', 'Полные права'),
-    ]
-    
+class ArticleTemplate(models.Model):
+    """Модель шаблона статьи"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='category_permissions', verbose_name='Группа')
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='group_permissions', verbose_name='Категория')
-    permission_level = models.CharField(max_length=10, choices=PERMISSION_LEVELS, default='none', verbose_name='Уровень доступа')
+    name = models.CharField(max_length=255, verbose_name='Название')
+    html = models.TextField(verbose_name='HTML содержимое')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлено')
     
     class Meta:
-        verbose_name = 'Право доступа группы на категорию'
-        verbose_name_plural = 'Права доступа групп на категории'
-        unique_together = [['group', 'category']]
-        ordering = ['group__name', 'category__name']
+        verbose_name = 'Шаблон статьи'
+        verbose_name_plural = 'Шаблоны статей'
+        ordering = ['name']
         indexes = [
-            models.Index(fields=['group', 'category']),
-            models.Index(fields=['category', 'permission_level']),
+            models.Index(fields=['name']),
         ]
     
     def __str__(self):
-        return f"{self.group.name} - {self.category.name}: {self.get_permission_level_display()}"
+        return self.name
+
+
+class Comment(models.Model):
+    """Модель комментария к статье"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='comments', verbose_name='Статья')
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='comments', verbose_name='Автор')
+    content = models.TextField(verbose_name='Содержимое (HTML)')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies', verbose_name='Родительский комментарий')
+    referenced_comments = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='referenced_by', verbose_name='Ссылки на комментарии')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлено')
+    
+    class Meta:
+        verbose_name = 'Комментарий'
+        verbose_name_plural = 'Комментарии'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['article', 'created_at']),
+            models.Index(fields=['parent', 'created_at']),
+        ]
+    
+    def __str__(self):
+        author_name = self.author.username if self.author else 'Неизвестный'
+        content_preview = self.content[:50] if self.content else ''
+        return f"{author_name}: {content_preview}"
+
+
 

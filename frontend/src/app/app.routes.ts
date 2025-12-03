@@ -25,17 +25,21 @@ export const routes: Routes = [
     loadComponent: () => import('./articles/article-list/article-list.component').then(m => m.ArticleListComponent)
   },
   {
-    path: 'categories/:id',
+    path: 'technologies/:id',
+    loadComponent: () => import('./articles/technology-articles/technology-articles.component').then(m => m.TechnologyArticlesComponent)
+  },
+  {
+    path: 'elements/:id',
     loadComponent: () => import('./articles/category-articles/category-articles.component').then(m => m.CategoryArticlesComponent)
   },
   {
-    path: 'categories/:id/articles/new',
+    path: 'elements/:id/articles/new',
     loadComponent: () => import('./articles/article-editor/article-editor.component').then(m => m.ArticleEditorComponent),
     canActivate: [authGuard]
   },
   {
     path: 'articles/new',
-    loadComponent: () => import('./articles/article-editor/article-editor.component').then(m => m.ArticleEditorComponent),
+    loadComponent: () => import('./articles/article-create-wizard/article-create-wizard.component').then(m => m.ArticleCreateWizardComponent),
     canActivate: [authGuard]
   },
   {

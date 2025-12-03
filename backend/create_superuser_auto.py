@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'wiki_backend.settings')
 django.setup()
 
-from django.contrib.auth.models import User
+from users.models import User
 
 def create_superuser_auto(username='admin', email='admin@example.com', password='admin123'):
     """Создает суперпользователя с заданными параметрами"""

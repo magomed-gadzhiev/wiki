@@ -5,7 +5,7 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } 
 import { Observable, forkJoin } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ArticleService } from '../../core/services/article.service';
-import { Article, Category, Tag, ArticleOption, ArticleOptionValue, ArticleAttachment } from '../../core/models/article.model';
+import { Article, Element, Tag, ArticleOption, ArticleOptionValue, ArticleAttachment } from '../../core/models/article.model';
 import { AuthService } from '../../core/services/auth.service';
 import * as grapesjs from 'grapesjs';
 
@@ -13,485 +13,8 @@ import * as grapesjs from 'grapesjs';
   selector: 'app-article-editor',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterModule],
-  template: `
-    <div class="container">
-      <h1>{{ isEditMode ? 'Редактирование статьи' : 'Новая статья' }}</h1>
-      
-      <form [formGroup]="articleForm" (ngSubmit)="onSubmit()">
-        <div class="card">
-          <div class="form-group">
-            <label for="title">Заголовок *</label>
-            <input 
-              id="title" 
-              type="text" 
-              formControlName="title"
-              [class.error]="articleForm.get('title')?.invalid && articleForm.get('title')?.touched"
-            />
-            <div *ngIf="articleForm.get('title')?.invalid && articleForm.get('title')?.touched" class="error-message">
-              Заголовок обязателен
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="summary">Краткое описание</label>
-            <textarea 
-              id="summary" 
-              formControlName="summary"
-              rows="3"
-            ></textarea>
-          </div>
-          
-          <div class="form-group">
-            <label for="category_id">Категория</label>
-            <select 
-              id="category_id" 
-              formControlName="category_id"
-            >
-              <option [ngValue]="null">-- Без категории --</option>
-              <option *ngFor="let category of (availableCategoriesForCreation || []); trackBy: trackByCategoryId" [ngValue]="category.id">
-                {{ category.name }}
-              </option>
-            </select>
-            <div *ngIf="categorySelectionError" class="error-message" style="margin-top: 5px;">
-              {{ categorySelectionError }}
-            </div>
-            <div *ngIf="articleForm.get('category_id')?.value && !categorySelectionError" style="font-size: 12px; color: #666; margin-top: 5px;">
-              Текущее значение: {{ articleForm.get('category_id')?.value }}
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label>Опции статьи</label>
-            <div class="options-table-container">
-              <table class="table table-bordered options-table">
-                <thead>
-                  <tr>
-                    <th style="width: 40%;">Опция</th>
-                    <th style="width: 50%;">Значение</th>
-                    <th style="width: 10%;"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let optionValue of optionValuesList; let i = index">
-                    <td>
-                      <select 
-                        [(ngModel)]="optionValue.option_id"
-                        [ngModelOptions]="{standalone: true}"
-                        class="form-control form-control-sm"
-                        [disabled]="!!optionValue.id"
-                      >
-                        <option [ngValue]="null">-- Выберите опцию --</option>
-                        <option *ngFor="let option of getAvailableOptions(optionValue.option_id, i)" [ngValue]="option.id">
-                          {{ option.name }}
-                          <span *ngIf="option.description"> - {{ option.description }}</span>
-                        </option>
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        [(ngModel)]="optionValue.value"
-                        [ngModelOptions]="{standalone: true}"
-                        class="form-control form-control-sm"
-                        placeholder="Введите значение"
-                      />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-danger"
-                        (click)="removeOptionValue(i)"
-                        title="Удалить"
-                      >
-                        ×
-                      </button>
-                    </td>
-                  </tr>
-                  <tr *ngIf="optionValuesList.length === 0">
-                    <td colspan="3" class="text-center text-muted">
-                      Нет добавленных опций
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <button
-                type="button"
-                class="btn btn-sm btn-primary add-option-btn"
-                (click)="addOptionValue()"
-              >
-                + Добавить опцию
-              </button>
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="tags">Теги</label>
-            <div class="tags-container">
-              <div class="tags-input-wrapper">
-                <input 
-                  type="text" 
-                  id="tag-input"
-                  [(ngModel)]="newTagName"
-                  (keydown.enter)="addNewTag($event)"
-                  (keydown.arrowdown)="navigateSuggestions($event, 1)"
-                  (keydown.arrowup)="navigateSuggestions($event, -1)"
-                  (keydown.escape)="hideSuggestions()"
-                  (input)="searchTags($event)"
-                  (focus)="onTagInputFocus()"
-                  (blur)="onTagInputBlur()"
-                  placeholder="Введите название тега или выберите из списка"
-                  class="tag-input"
-                  [ngModelOptions]="{standalone: true}"
-                />
-                <div class="tags-suggestions" *ngIf="tagSuggestions.length > 0 && showTagSuggestions" (mousedown)="$event.preventDefault()">
-                  <div 
-                    *ngFor="let tag of tagSuggestions; let i = index" 
-                    class="tag-suggestion"
-                    [class.selected]="i === selectedSuggestionIndex"
-                    (click)="selectTag(tag)"
-                    (mouseenter)="selectedSuggestionIndex = i"
-                  >
-                    <span class="tag-suggestion-icon">🏷️</span>
-                    <span class="tag-suggestion-name">{{ tag.name }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="selected-tags" *ngIf="selectedTags.length > 0">
-                <span 
-                  *ngFor="let tag of selectedTags" 
-                  class="badge bg-primary tag-badge"
-                >
-                  {{ tag.name }}
-                  <button type="button" class="tag-remove" (click)="removeTag(tag)">×</button>
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="content">Содержимое *</label>
-            <div #gjsEditor id="gjs-editor" style="min-height: 500px;"></div>
-
-            <div *ngIf="articleForm.get('content')?.invalid && articleForm.get('content')?.touched" class="error-message">
-              Содержимое обязательно
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label>
-              <input type="checkbox" formControlName="is_published" />
-              Опубликовано
-            </label>
-          </div>
-          
-          <div class="form-group" *ngIf="isEditMode">
-            <label for="change_description">Описание изменений (опционально)</label>
-            <textarea 
-              id="change_description" 
-              formControlName="change_description"
-              rows="2"
-              placeholder="Опишите, что было изменено в этой версии"
-            ></textarea>
-          </div>
-          
-          <div class="form-group" *ngIf="isEditMode && articleId">
-            <label>Вложения к статье</label>
-            <div class="attachments-section">
-              <div class="attachment-upload">
-                <input 
-                  type="file" 
-                  #attachmentInput
-                  id="attachmentInput"
-                  style="display: none"
-                  (change)="onAttachmentFileSelected($event)"
-                />
-                <div class="upload-controls">
-                  <button 
-                    type="button" 
-                    class="btn btn-sm btn-primary"
-                    (click)="attachmentInput.click()"
-                    [disabled]="uploadingAttachment"
-                  >
-                    {{ uploadingAttachment ? 'Загрузка...' : '📎 Загрузить файл' }}
-                  </button>
-                  <span class="file-size-hint">Максимальный размер: 50 МБ</span>
-                </div>
-                <div class="attachment-comment-input" *ngIf="selectedAttachmentFile">
-                  <label for="attachment-comment">Комментарий к файлу (опционально):</label>
-                  <textarea 
-                    id="attachment-comment"
-                    [(ngModel)]="attachmentComment"
-                    [ngModelOptions]="{standalone: true}"
-                    rows="2"
-                    placeholder="Введите комментарий к файлу"
-                    class="form-control"
-                  ></textarea>
-                  <div class="attachment-actions">
-                    <button 
-                      type="button" 
-                      class="btn btn-sm btn-success"
-                      (click)="uploadAttachment()"
-                      [disabled]="uploadingAttachment"
-                    >
-                      Загрузить
-                    </button>
-                    <button 
-                      type="button" 
-                      class="btn btn-sm btn-secondary"
-                      (click)="cancelAttachmentUpload()"
-                      [disabled]="uploadingAttachment"
-                    >
-                      Отмена
-                    </button>
-                  </div>
-                </div>
-                <div *ngIf="attachmentUploadError" class="error-message">
-                  {{ attachmentUploadError }}
-                </div>
-              </div>
-              
-              <div class="attachments-list" *ngIf="attachments && attachments.length > 0">
-                <div class="attachment-item" *ngFor="let attachment of attachments">
-                  <div class="attachment-info">
-                    <a [href]="attachment.file_url" target="_blank" class="attachment-link">
-                      <span class="attachment-icon">📎</span>
-                      <span class="attachment-filename">{{ attachment.filename }}</span>
-                    </a>
-                    <div class="attachment-meta">
-                      <span class="attachment-size">{{ attachment.file_size_display }}</span>
-                      <span class="attachment-date">{{ attachment.uploaded_at | date:'dd.MM.yyyy, HH:mm' }}</span>
-                      <span class="attachment-uploader">Загрузил: {{ attachment.uploaded_by_username }}</span>
-                    </div>
-                    <div class="attachment-comment" *ngIf="attachment.comment">
-                      <strong>Комментарий:</strong> {{ attachment.comment }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" [disabled]="articleForm.invalid || saving">
-              {{ saving ? 'Сохранение...' : 'Сохранить' }}
-            </button>
-            <button type="button" class="btn btn-secondary" (click)="cancel()">Отмена</button>
-            <button type="button" class="btn btn-secondary" (click)="importWord()">Импорт из Word</button>
-          </div>
-        </div>
-        
-        <div *ngIf="error" class="error-message">{{ error }}</div>
-      </form>
-      
-      <input 
-        type="file" 
-        #fileInput 
-        accept=".doc,.docx" 
-        style="display: none"
-        (change)="onWordFileSelected($event)"
-      />
-      
-    </div>
-  `,
-  styles: [`
-    .form-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 20px;
-    }
-    .error-message {
-      color: #dc3545;
-      font-size: 12px;
-      margin-top: 5px;
-    }
-    input.error {
-      border-color: #dc3545;
-    }
-    #gjs-editor {
-      border: 1px solid #ddd;
-      border-radius: 4px;
-    }
-    .tags-container {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .tags-input-wrapper {
-      position: relative;
-    }
-    .tag-input {
-      width: 100%;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-    }
-    .tags-suggestions {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: white;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 1000;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      margin-top: 2px;
-    }
-    .tag-suggestion {
-      padding: 8px 12px;
-      cursor: pointer;
-      border-bottom: 1px solid #eee;
-    }
-    .tag-suggestion:hover {
-      background-color: #f5f5f5;
-    }
-    .tag-suggestion:last-child {
-      border-bottom: none;
-    }
-    .selected-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .tag-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 0.35em 0.65em;
-      font-size: 0.875em;
-      font-weight: 500;
-    }
-    .tag-remove {
-      background: rgba(255, 255, 255, 0.3);
-      border: none;
-      color: white;
-      cursor: pointer;
-      font-size: 14px;
-      line-height: 1;
-      padding: 0;
-      width: 18px;
-      height: 18px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 50%;
-      transition: all 0.2s ease;
-      margin-left: 4px;
-    }
-    .tag-remove:hover {
-      background: rgba(255, 255, 255, 0.5);
-    }
-    .tag-suggestion-icon {
-      margin-right: 8px;
-      font-size: 14px;
-    }
-    .tag-suggestion-name {
-      flex: 1;
-    }
-    .tag-suggestion.selected {
-      background-color: #e3f2fd;
-      color: #1976d2;
-    }
-    .options-table-container {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .options-table {
-      margin-bottom: 0;
-    }
-    .options-table th {
-      background-color: #f8f9fa;
-      font-weight: 600;
-      font-size: 13px;
-    }
-    .options-table td {
-      vertical-align: middle;
-      padding: 8px;
-    }
-    .add-option-btn {
-      align-self: flex-start;
-    }
-    .attachments-section {
-      margin-top: 10px;
-    }
-    .attachment-upload {
-      margin-bottom: 20px;
-    }
-    .upload-controls {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      margin-bottom: 10px;
-    }
-    .file-size-hint {
-      font-size: 0.9em;
-      color: #666;
-    }
-    .attachment-comment-input {
-      margin-top: 15px;
-      padding: 15px;
-      background-color: #f8f9fa;
-      border-radius: 4px;
-    }
-    .attachment-comment-input label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-    .attachment-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .attachments-list {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-      margin-top: 20px;
-    }
-    .attachment-item {
-      padding: 15px;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
-      background-color: #f8f9fa;
-    }
-    .attachment-info {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .attachment-link {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #007bff;
-      text-decoration: none;
-      font-weight: 500;
-      font-size: 1.1em;
-    }
-    .attachment-link:hover {
-      text-decoration: underline;
-    }
-    .attachment-icon {
-      font-size: 1.2em;
-    }
-    .attachment-meta {
-      display: flex;
-      gap: 15px;
-      font-size: 0.9em;
-      color: #666;
-    }
-    .attachment-comment {
-      margin-top: 8px;
-      padding: 8px;
-      background-color: #ffffff;
-      border-left: 3px solid #007bff;
-      font-size: 0.95em;
-    }
-  `]
+  templateUrl: './article-editor.component.html',
+  styleUrls: ['./article-editor.component.scss']
 })
 export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('fileInput') fileInput: any;
@@ -503,9 +26,9 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   articleId: string | null = null;
   saving = false;
   error: string | null = null;
-  categories: Category[] = [];
-  availableCategoriesForCreation: Category[] = [];
-  categorySelectionError: string | null = null;
+  elements: Element[] = [];
+  availableElementsForCreation: Element[] = [];
+  elementSelectionError: string | null = null;
   tags: Tag[] = [];
   selectedTags: Tag[] = [];
   tagSuggestions: Tag[] = [];
@@ -520,6 +43,9 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   attachmentComment: string = '';
   uploadingAttachment = false;
   attachmentUploadError: string | null = null;
+  isPublished = false;
+  publishing = false;
+  unpublishing = false;
 
   constructor(
     private fb: FormBuilder,
@@ -529,27 +55,26 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     private authService: AuthService
   ) {
     this.articleForm = this.fb.group({
-      title: ['', Validators.required],
+      model_name: ['', Validators.required],
       summary: [''],
-      category_id: [null],
+      element_id: [null],
       tag_ids: [[]],
-      content: ['', Validators.required],
-      is_published: [false],
+      content: [''],
       change_description: [''],
       option_values_data: [[]]
     });
 
     // Подписываемся на изменения категории для валидации прав
-    this.articleForm.get('category_id')?.valueChanges.subscribe(categoryId => {
-      this.validateCategorySelection(categoryId);
+    this.articleForm.get('element_id')?.valueChanges.subscribe(elementId => {
+      this.validateElementSelection(elementId);
     });
   }
 
   ngOnInit(): void {
     // Проверяем, находимся ли мы на странице создания статьи из категории
     const url = this.router.url;
-    const categoryMatch = url.match(/\/categories\/([^\/]+)\/articles\/new/);
-    const categoryId = categoryMatch ? categoryMatch[1] : null;
+    const elementMatch = url.match(/\/elements\/([^\/]+)\/articles\/new/);
+    const elementId = elementMatch ? elementMatch[1] : null;
     
     // Проверяем, редактируем ли мы существующую статью
     const articleIdMatch = url.match(/\/articles\/([^\/]+)\/edit/);
@@ -560,34 +85,25 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       this.articleId = id;
     }
     
-    // Загружаем категории сначала, затем статью (если редактирование)
-    this.loadCategories().subscribe({
-      next: (categories) => {
-        // Убеждаемся, что categories - это массив
-        this.categories = Array.isArray(categories) ? categories : [];
+    // Загружаем элементы сначала, затем статью (если редактирование)
+    this.loadElements().subscribe({
+      next: (elements) => {
+        // Убеждаемся, что elements - это массив
+        this.elements = Array.isArray(elements) ? elements : [];
         
-        // Фильтруем категории для создания статей - только с полными правами (full)
-        // В режиме редактирования показываем все категории, так как статья уже существует
-        if (this.isEditMode) {
-          this.availableCategoriesForCreation = this.categories;
-        } else {
-          this.availableCategoriesForCreation = this.categories.filter(category => 
-            category.user_permission_level === 'full' || category.user_permission_level === null
-          );
-        }
+        // Фильтруем элементы для создания статей - только с полными правами (full)
+        // Показываем все элементы (права проверяются на уровне API)
+        this.availableElementsForCreation = this.elements;
         
-        // Если это создание новой статьи и указана категория в URL
-        if (!this.isEditMode && categoryId) {
-          const category = this.availableCategoriesForCreation.find(c => c.id === categoryId);
-          if (category) {
-            this.articleForm.patchValue({ category_id: categoryId });
-          } else {
-            // Категория указана в URL, но у пользователя нет прав на создание
-            this.categorySelectionError = 'У вас нет прав на создание статей в этой категории';
+        // Если это создание новой статьи и указан элемент в URL
+        if (!this.isEditMode && elementId) {
+          const element = this.availableElementsForCreation.find(e => e.id === elementId);
+          if (element) {
+            this.articleForm.patchValue({ element_id: elementId });
           }
         }
         
-        // После загрузки категорий загружаем теги, опции и статью, если это режим редактирования
+        // После загрузки элементов загружаем теги, опции и статью, если это режим редактирования
         this.loadTags();
         this.loadOptions();
         if (id) {
@@ -595,9 +111,9 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         }
       },
       error: () => {
-        this.categories = []; // Устанавливаем пустой массив при ошибке
-        this.availableCategoriesForCreation = [];
-        // Все равно загружаем статью, даже если категории не загрузились
+        this.elements = []; // Устанавливаем пустой массив при ошибке
+        this.availableElementsForCreation = [];
+        // Все равно загружаем статью, даже если элементы не загрузились
         this.loadTags();
         if (id) {
           this.loadArticle(id);
@@ -606,32 +122,20 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     });
   }
 
-  validateCategorySelection(categoryId: string | null): void {
-    if (!categoryId) {
-      this.categorySelectionError = null;
+  validateElementSelection(elementId: string | null): void {
+    if (!elementId) {
+      this.elementSelectionError = null;
       return;
     }
 
     // В режиме редактирования не проверяем права (статья уже существует)
     if (this.isEditMode) {
-      this.categorySelectionError = null;
+      this.elementSelectionError = null;
       return;
     }
 
-    const category = this.categories.find(c => c.id === categoryId);
-    if (!category) {
-      this.categorySelectionError = null;
-      return;
-    }
-
-    // Проверяем права на категорию
-    if (category.user_permission_level === 'read' || category.user_permission_level === 'none') {
-      this.categorySelectionError = 'У вас нет прав на создание статей в этой категории. Доступно только чтение.';
-      // Сбрасываем выбор категории
-      this.articleForm.patchValue({ category_id: null });
-    } else {
-      this.categorySelectionError = null;
-    }
+    // Права проверяются на уровне API, здесь просто очищаем ошибку
+    this.elementSelectionError = null;
   }
 
   loadTags(): void {
@@ -850,38 +354,38 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     this.articleForm.patchValue({ tag_ids: tagIds });
   }
 
-  loadCategories(): Observable<Category[]> {
-    return this.articleService.getCategories().pipe(
-      map(categories => {
+  loadElements(): Observable<Element[]> {
+    return this.articleService.getElements().pipe(
+      map(elements => {
         // Убеждаемся, что возвращается массив
-        if (Array.isArray(categories)) {
-          return categories;
+        if (Array.isArray(elements)) {
+          return elements;
         }
         // Если ответ в формате { results: [...] } или другом
-        if (categories && typeof categories === 'object' && 'results' in categories) {
-          return (categories as any).results;
+        if (elements && typeof elements === 'object' && 'results' in elements) {
+          return (elements as any).results;
         }
         // Если это объект, преобразуем в массив
-        if (categories && typeof categories === 'object') {
-          return Object.values(categories);
+        if (elements && typeof elements === 'object') {
+          return Object.values(elements);
         }
         return [];
       })
     );
   }
 
-  compareCategory(cat1: string | null, cat2: string | null): boolean {
+  compareElement(el1: string | null, el2: string | null): boolean {
     // Приводим к строкам для сравнения, чтобы избежать проблем с типами
-    const str1 = cat1 ? String(cat1) : null;
-    const str2 = cat2 ? String(cat2) : null;
+    const str1 = el1 ? String(el1) : null;
+    const str2 = el2 ? String(el2) : null;
     
     if (str1 === null && str2 === null) return true;
     if (str1 === null || str2 === null) return false;
     return str1 === str2;
   }
 
-  trackByCategoryId(index: number, category: Category): string {
-    return category.id;
+  trackByElementId(index: number, element: Element): string {
+    return element.id;
   }
 
   ngAfterViewInit(): void {
@@ -1105,60 +609,86 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
             if (this.editor && this.editor.Canvas) {
               const canvas = this.editor.Canvas.getFrameEl();
               if (canvas && canvas.contentDocument) {
-                // Пытаемся получить Bootstrap CSS из уже загруженных стилей на странице
+                // Получаем Bootstrap CSS из скомпилированных стилей страницы
                 let bootstrapCss = '';
                 
                 try {
-                  const bootstrapStyles = Array.from(document.styleSheets)
-                    .find(sheet => {
-                      try {
-                        return sheet.href && sheet.href.includes('bootstrap');
-                      } catch {
-                        return false;
+                  // Собираем все CSS правила из всех stylesheets на странице
+                  const allRules: string[] = [];
+                  Array.from(document.styleSheets).forEach(sheet => {
+                    try {
+                      if (sheet.cssRules) {
+                        Array.from(sheet.cssRules).forEach(rule => {
+                          allRules.push(rule.cssText);
+                        });
                       }
-                    });
+                    } catch (e) {
+                      // Игнорируем ошибки CORS для внешних stylesheets
+                    }
+                  });
                   
-                  if (bootstrapStyles) {
-                    const rules = Array.from(bootstrapStyles.cssRules || []);
-                    bootstrapCss = rules.map(rule => rule.cssText).join('\n');
+                  // Фильтруем только Bootstrap стили (по характерным классам)
+                  const bootstrapKeywords = [
+                    '.btn', '.dropdown', '.nav', '.navbar', '.card', 
+                    '.container', '.row', '.col', '.form-control', '.modal'
+                  ];
+                  
+                  bootstrapCss = allRules
+                    .filter(rule => bootstrapKeywords.some(keyword => rule.includes(keyword)))
+                    .join('\n');
+                  
+                  // Если нашли Bootstrap стили, добавляем их
+                  if (bootstrapCss) {
+                    const style = canvas.contentDocument.createElement('style');
+                    style.textContent = bootstrapCss;
+                    canvas.contentDocument.head.appendChild(style);
+                    // Добавляем стили layout после добавления Bootstrap CSS
+                    addLayoutStyles(canvas.contentDocument);
+                  } else {
+                    // Fallback: если не удалось получить стили, используем CDN
+                    fetch('https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css')
+                      .then(response => response.text())
+                      .then(cssText => {
+                        const style = canvas.contentDocument!.createElement('style');
+                        style.textContent = cssText;
+                        canvas.contentDocument!.head.appendChild(style);
+                        addLayoutStyles(canvas.contentDocument!);
+                      })
+                      .catch(() => {
+                        const link = canvas.contentDocument!.createElement('link');
+                        link.rel = 'stylesheet';
+                        link.href = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css';
+                        canvas.contentDocument!.head.appendChild(link);
+                        link.onload = () => {
+                          addLayoutStyles(canvas.contentDocument!);
+                        };
+                        setTimeout(() => {
+                          addLayoutStyles(canvas.contentDocument!);
+                        }, 500);
+                      });
                   }
                 } catch (e) {
-                  // Не удалось получить Bootstrap CSS из styleSheets
-                }
-                
-                // Если не удалось получить из styleSheets, используем CDN
-                if (!bootstrapCss) {
+                  // Ошибка при получении стилей, используем CDN как fallback
                   fetch('https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css')
                     .then(response => response.text())
                     .then(cssText => {
                       const style = canvas.contentDocument!.createElement('style');
                       style.textContent = cssText;
                       canvas.contentDocument!.head.appendChild(style);
-                      // Добавляем стили layout после загрузки Bootstrap CSS
                       addLayoutStyles(canvas.contentDocument!);
                     })
                     .catch(() => {
-                      // Fallback: добавляем link на CDN
                       const link = canvas.contentDocument!.createElement('link');
                       link.rel = 'stylesheet';
                       link.href = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css';
                       canvas.contentDocument!.head.appendChild(link);
-                      // Добавляем стили layout после добавления link
                       link.onload = () => {
                         addLayoutStyles(canvas.contentDocument!);
                       };
-                      // Если onload не сработает, добавляем с задержкой
                       setTimeout(() => {
                         addLayoutStyles(canvas.contentDocument!);
                       }, 500);
                     });
-                } else {
-                  // Добавляем полученный CSS
-                  const style = canvas.contentDocument.createElement('style');
-                  style.textContent = bootstrapCss;
-                  canvas.contentDocument.head.appendChild(style);
-                  // Добавляем стили layout после добавления Bootstrap CSS
-                  addLayoutStyles(canvas.contentDocument);
                 }
               }
             }
@@ -1301,7 +831,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     blockManager.add('container', {
       label: 'Container',
       category: 'Layout',
-      content: '<div class="container"><p>Содержимое контейнера</p></div>',
+      content: '<div class="container-fluid"><p>Содержимое контейнера</p></div>',
       attributes: { class: 'gjs-block' },
       media: getIcon('container')
     });
@@ -2526,21 +2056,21 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       next: (article) => {
         
         // Устанавливаем значения формы
-        const categoryId = article.category?.id || null;
+        const elementId = article.element?.id || null;
         
-        // В режиме редактирования добавляем категорию статьи в список доступных категорий,
+        // В режиме редактирования добавляем элемент статьи в список доступных элементов,
         // даже если у пользователя нет полных прав (статья уже существует)
-        if (categoryId && this.isEditMode) {
-          const articleCategory = article.category;
-          if (articleCategory) {
-            // Проверяем, есть ли уже эта категория в списке
-            const existingCategory = this.categories.find(c => c.id === categoryId);
-            if (!existingCategory) {
-              // Добавляем категорию статьи в список категорий
-              this.categories.push(articleCategory);
+        if (elementId && this.isEditMode) {
+          const articleElement = article.element;
+          if (articleElement) {
+            // Проверяем, есть ли уже этот элемент в списке
+            const existingElement = this.elements.find(e => e.id === elementId);
+            if (!existingElement) {
+              // Добавляем элемент статьи в список элементов
+              this.elements.push(articleElement);
             }
-            // Обновляем список доступных категорий для редактирования
-            this.availableCategoriesForCreation = this.categories;
+            // Обновляем список доступных элементов для редактирования
+            this.availableElementsForCreation = this.elements;
           }
         }
         
@@ -2559,13 +2089,14 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           this.optionValuesList = [];
         }
         
+        this.isPublished = article.is_published || false;
+        
         this.articleForm.patchValue({
-          title: article.title || '',
+          model_name: article.model_name || '',
           summary: article.summary || '',
           content: article.content || '',
-          is_published: article.is_published || false,
           change_description: '',
-          category_id: categoryId,
+          element_id: elementId,
           tag_ids: tagIds
         });
         
@@ -2585,14 +2116,14 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         // Дополнительно устанавливаем значение через setValue для надежности
         // Используем setTimeout, чтобы дать время Angular обновить DOM
         setTimeout(() => {
-          const control = this.articleForm.get('category_id');
+          const control = this.articleForm.get('element_id');
           if (control) {
-            if (categoryId && this.categories.length > 0) {
-              // Проверяем, что категория существует в списке
-              const categoryExists = this.categories.some(cat => String(cat.id) === String(categoryId));
+            if (elementId && this.elements.length > 0) {
+              // Проверяем, что элемент существует в списке
+              const elementExists = this.elements.some(el => String(el.id) === String(elementId));
               
-              if (categoryExists) {
-                control.setValue(categoryId, { emitEvent: false });
+              if (elementExists) {
+                control.setValue(elementId, { emitEvent: false });
               } else {
                 control.setValue(null, { emitEvent: false });
               }
@@ -2609,18 +2140,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   onSubmit(): void {
-    // Проверяем права на категорию перед отправкой (только для создания новых статей)
-    if (!this.isEditMode) {
-      const categoryId = this.articleForm.get('category_id')?.value;
-      if (categoryId) {
-        const category = this.categories.find(c => c.id === categoryId);
-        if (category && (category.user_permission_level === 'read' || category.user_permission_level === 'none')) {
-          this.categorySelectionError = 'У вас нет прав на создание статей в этой категории. Доступно только чтение.';
-          this.error = 'Невозможно создать статью: недостаточно прав на категорию.';
-          return;
-        }
-      }
-    }
+    // Права проверяются на уровне API
 
     // Получаем контент из редактора перед сохранением
     if (this.editor) {
@@ -2701,9 +2221,9 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   saveArticle(): void {
     const formValue = this.articleForm.value;
     
-    // Преобразуем category_id в формат, который ожидает API
-    if (!formValue.category_id || formValue.category_id === '' || formValue.category_id === null) {
-      formValue.category_id = null;
+    // Преобразуем element_id в формат, который ожидает API
+    if (!formValue.element_id || formValue.element_id === '' || formValue.element_id === null) {
+      formValue.element_id = null;
     }
     
     // Убеждаемся, что tag_ids - это массив
@@ -2713,15 +2233,15 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     
     // Определяем категорию из URL для перенаправления
     const url = this.router.url;
-    const categoryMatch = url.match(/\/categories\/([^\/]+)\/articles\/new/);
-    const categoryId = categoryMatch ? categoryMatch[1] : null;
+    const elementMatch = url.match(/\/elements\/([^\/]+)\/articles\/new/);
+    const elementId = elementMatch ? elementMatch[1] : null;
     
     if (this.isEditMode && this.articleId) {
       this.articleService.updateArticle(this.articleId, formValue).subscribe({
         next: (article) => {
-          // Если редактировали из категории, возвращаемся туда, иначе на страницу статьи
-          if (categoryId) {
-            this.router.navigate(['/categories', categoryId]);
+          // Если редактировали из элемента, возвращаемся туда, иначе на страницу статьи
+          if (elementId) {
+            this.router.navigate(['/elements', elementId]);
           } else {
             this.router.navigate(['/articles', article.id]);
           }
@@ -2738,9 +2258,9 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           this.articleId = article.id;
           this.isEditMode = true;
           
-          // Если создали из категории, возвращаемся туда, иначе остаемся на странице редактирования
-          if (categoryId) {
-            this.router.navigate(['/categories', categoryId]);
+          // Если создали из элемента, возвращаемся туда, иначе остаемся на странице редактирования
+          if (elementId) {
+            this.router.navigate(['/elements', elementId]);
           } else {
             // Не перенаправляем, остаемся на странице редактирования для возможности загрузки изображений
             this.saving = false;
@@ -2758,12 +2278,12 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   cancel(): void {
     // Определяем категорию из URL для перенаправления
     const url = this.router.url;
-    const categoryMatch = url.match(/\/categories\/([^\/]+)\/articles\/new/);
-    const categoryId = categoryMatch ? categoryMatch[1] : null;
+    const elementMatch = url.match(/\/elements\/([^\/]+)\/articles\/new/);
+    const elementId = elementMatch ? elementMatch[1] : null;
     
-    if (categoryId) {
-      // Возвращаемся на страницу категории
-      this.router.navigate(['/categories', categoryId]);
+    if (elementId) {
+      // Возвращаемся на страницу элемента
+      this.router.navigate(['/elements', elementId]);
     } else if (this.articleId) {
       // Возвращаемся на страницу статьи
       this.router.navigate(['/articles', this.articleId]);
@@ -2946,6 +2466,66 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     if (this.attachmentInput && this.attachmentInput.nativeElement) {
       this.attachmentInput.nativeElement.value = '';
     }
+  }
+
+  publishArticle(): void {
+    if (!this.articleId) {
+      return;
+    }
+    
+    if (this.isPublished) {
+      this.error = 'Статья уже опубликована';
+      return;
+    }
+    
+    if (!confirm('Вы уверены, что хотите опубликовать эту статью?')) {
+      return;
+    }
+    
+    this.publishing = true;
+    this.error = null;
+    
+    this.articleService.publishArticle(this.articleId).subscribe({
+      next: (article) => {
+        this.isPublished = article.is_published;
+        this.publishing = false;
+        alert('Статья успешно опубликована');
+      },
+      error: (err) => {
+        this.publishing = false;
+        this.error = err.error?.error || err.error?.detail || 'Ошибка при публикации статьи';
+      }
+    });
+  }
+
+  unpublishArticle(): void {
+    if (!this.articleId) {
+      return;
+    }
+    
+    if (!this.isPublished) {
+      this.error = 'Статья не опубликована';
+      return;
+    }
+    
+    if (!confirm('Вы уверены, что хотите снять эту статью с публикации?')) {
+      return;
+    }
+    
+    this.unpublishing = true;
+    this.error = null;
+    
+    this.articleService.unpublishArticle(this.articleId).subscribe({
+      next: (article) => {
+        this.isPublished = article.is_published;
+        this.unpublishing = false;
+        alert('Статья успешно снята с публикации');
+      },
+      error: (err) => {
+        this.unpublishing = false;
+        this.error = err.error?.error || err.error?.detail || 'Ошибка при снятии статьи с публикации';
+      }
+    });
   }
 
 }

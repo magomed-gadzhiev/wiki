@@ -1,0 +1,58 @@
+<div class="container-fluid">
+  <div *ngIf="loading" class="loading">Загрузка...</div>
+  
+  <div *ngIf="!loading && technology">
+    <div class="technology-header">
+      <h1>{{ technology.name }}</h1>
+    </div>
+    
+    <div *ngIf="technology.elements && technology.elements.length > 0" class="elements-list">
+      <h2>Элементы</h2>
+      <div class="elements-grid">
+        <div class="element-card card" *ngFor="let element of technology.elements">
+          <a [routerLink]="['/elements', element.id]" class="element-link">
+            <h3>{{ element.name }}</h3>
+          </a>
+        </div>
+      </div>
+    </div>
+    
+    <div *ngIf="!technology.elements || technology.elements.length === 0" class="empty-state">
+      <p>В этой технологии пока нет элементов</p>
+    </div>
+
+    <div *ngIf="technology.elements && technology.elements.length > 0" class="articles-list">
+      <h2>Статьи</h2>
+      <div *ngIf="loadingArticles" class="loading">Загрузка статей...</div>
+      
+      <div *ngIf="!loadingArticles && articles.length === 0" class="empty-state">
+        <p>В этой технологии пока нет статей</p>
+      </div>
+      
+      <div *ngIf="!loadingArticles && articles.length > 0" class="articles-grid">
+        <div class="card article-card" [class.draft-card]="!article.is_published" *ngFor="let article of articles">
+          <div class="article-header">
+            <h3>
+              <span *ngIf="article.element">
+                <a [routerLink]="['/elements', article.element.id]" class="hierarchy-link">{{ article.element.name }}</a> / 
+              </span>
+              <a [routerLink]="['/articles', article.id]">{{ article.model_name }}</a>
+            </h3>
+          </div>
+          <p class="summary">{{ article.summary || 'Нет описания' }}</p>
+          <div class="article-options" *ngIf="article.option_values && article.option_values.length > 0">
+            <div class="option-item" *ngFor="let optionValue of article.option_values">
+              <span class="option-name">{{ optionValue.option.name }}:</span>
+              <span class="option-value">{{ optionValue.value }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div *ngIf="!loading && !technology" class="empty-state">
+    <p>Технология не найдена</p>
+  </div>
+</div>
+

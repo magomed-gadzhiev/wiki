@@ -1,11 +1,12 @@
 from rest_framework import viewsets, status, permissions
+from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, F
 from django.db.models.functions import Lower
 from django.utils import timezone
-from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
-from .serializers import ArticleSerializer, ArticleListSerializer, ArticleVersionSerializer, ArticleImageSerializer, ArticleAttachmentSerializer, CategorySerializer, SectionSerializer, TagSerializer, ArticleOptionSerializer, ArticleOptionValueSerializer, GroupSerializer, GroupDetailSerializer, CategoryPermissionSerializer
+from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Element, Technology, Tag, ArticleOption, ArticleOptionValue, Group, ArticleTemplate, Comment
+from .serializers import ArticleSerializer, ArticleListSerializer, ArticleVersionSerializer, ArticleImageSerializer, ArticleAttachmentSerializer, ElementSerializer, TechnologySerializer, TagSerializer, ArticleOptionSerializer, ArticleOptionValueSerializer, GroupSerializer, GroupDetailSerializer, ArticleTemplateSerializer, CommentSerializer
 from .permissions import ArticlePermission
 from .word_import_processor import WordImportProcessor
 import mammoth
@@ -363,61 +364,16 @@ class ArticleViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(is_deleted=False)
         
         # Фильтрация по правам доступа
-        if not user.is_superuser:
-            # Получаем все группы пользователя
-            if user.is_authenticated:
-                user_groups = user.article_groups.all()
-                has_groups = user_groups.exists()
-            else:
-                user_groups = Group.objects.none()
-                has_groups = False
-            
-            # Строим условия доступа
-            access_conditions = Q(author=user)  # Автор всегда видит свои статьи
-            
-            # Если пользователь не состоит ни в одной группе
-            if not has_groups:
-                # Показываем только статьи, на которые есть индивидуальные права
-                access_conditions |= Q(can_view=user)
-            else:
-                # Пользователь состоит в группах - применяем логику через группы
-                # Получаем права групп на категории
-                category_permissions = CategoryPermission.objects.filter(group__in=user_groups)
-                
-                if category_permissions.exists():
-                    # Категории с полными правами - видим все статьи (включая черновики)
-                    full_permission_categories = list(category_permissions.filter(permission_level='full').values_list('category_id', flat=True))
-                    if full_permission_categories:
-                        access_conditions |= Q(category_id__in=full_permission_categories)
-                    
-                    # Категории с правом только на чтение - видим только опубликованные
-                    read_permission_categories = list(category_permissions.filter(permission_level='read').values_list('category_id', flat=True))
-                    if read_permission_categories:
-                        access_conditions |= Q(category_id__in=read_permission_categories, is_published=True)
-                    
-                    # Статьи без категории или с категорией, на которую нет прав через группы
-                    # Показываем только если есть индивидуальные права
-                    categories_with_permissions = list(category_permissions.values_list('category_id', flat=True).distinct())
-                    if categories_with_permissions:
-                        access_conditions |= Q(
-                            Q(category__isnull=True) | ~Q(category_id__in=categories_with_permissions),
-                            Q(can_view=user)
-                        )
-                    else:
-                        # Нет категорий с правами, показываем только статьи без категории с индивидуальными правами
-                        access_conditions |= Q(category__isnull=True, can_view=user)
-                else:
-                    # Пользователь в группах, но нет прав на категории
-                    # Показываем только статьи с индивидуальными правами
-                    access_conditions |= Q(can_view=user)
-            
-            queryset = queryset.filter(access_conditions).distinct()
+        # Права проверяются в ArticlePermission, здесь только базовая фильтрация
+        # Автор всегда видит свои статьи (проверка в permissions)
+        # Пользователи с read видят только опубликованные (проверка в permissions)
+        # Пользователи с edit видят все статьи (проверка в permissions)
         
         # Поиск
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(
-                Q(title__icontains=search) |
+                Q(model_name__icontains=search) |
                 Q(content__icontains=search) |
                 Q(summary__icontains=search)
             )
@@ -432,10 +388,10 @@ class ArticleViewSet(viewsets.ModelViewSet):
         if is_published is not None:
             queryset = queryset.filter(is_published=is_published.lower() == 'true')
         
-        # Фильтр по категории
-        category_id = self.request.query_params.get('category', None)
-        if category_id:
-            queryset = queryset.filter(category_id=category_id)
+        # Фильтр по элементу
+        element_id = self.request.query_params.get('element', None)
+        if element_id:
+            queryset = queryset.filter(element_id=element_id)
         
         # Фильтр по тегам (можно передать несколько через tags=id1&tags=id2)
         tag_ids = self.request.query_params.getlist('tags')
@@ -458,7 +414,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
                         option_values__value__iregex=f'.*{option_value_escaped}.*'
                     ).distinct()
         
-        return queryset.select_related('author', 'category').prefetch_related(
+        return queryset.select_related('author', 'element').prefetch_related(
             'can_view', 'can_edit', 'can_delete', 'tags', 'images', 'versions',
             'option_values__option'
         )
@@ -477,7 +433,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         # Создаем первую версию
         ArticleVersion.objects.create(
             article=article,
-            title=article.title,
+            model_name=article.model_name,
             content=article.content,
             summary=article.summary,
             version_number=1,
@@ -489,7 +445,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         """Обновление статьи с созданием новой версии"""
         article = serializer.instance
         old_content = article.content
-        old_title = article.title
+        old_model_name = article.model_name
         
         # Получаем change_description из request.data, если есть
         change_description = self.request.data.get('change_description', 'Обновление статьи')
@@ -498,13 +454,13 @@ class ArticleViewSet(viewsets.ModelViewSet):
         updated_article = serializer.save()
         
         # Создаем новую версию, если контент изменился
-        if old_content != updated_article.content or old_title != updated_article.title:
+        if old_content != updated_article.content or old_model_name != updated_article.model_name:
             last_version = article.versions.first()
             new_version_number = (last_version.version_number + 1) if last_version else 1
             
             ArticleVersion.objects.create(
                 article=updated_article,
-                title=updated_article.title,
+                model_name=updated_article.model_name,
                 content=updated_article.content,
                 summary=updated_article.summary,
                 version_number=new_version_number,
@@ -520,6 +476,40 @@ class ArticleViewSet(viewsets.ModelViewSet):
         instance.deleted_at = timezone.now()
         instance.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    @action(detail=True, methods=['post'])
+    def publish(self, request, pk=None):
+        """Публикация статьи (изменение статуса is_published на True)"""
+        article = self.get_object()
+        
+        if article.is_published:
+            return Response(
+                {'error': 'Статья уже опубликована'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        article.is_published = True
+        article.save()
+        
+        serializer = self.get_serializer(article)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def unpublish(self, request, pk=None):
+        """Снятие статьи с публикации (изменение статуса is_published на False)"""
+        article = self.get_object()
+        
+        if not article.is_published:
+            return Response(
+                {'error': 'Статья не опубликована'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        article.is_published = False
+        article.save()
+        
+        serializer = self.get_serializer(article)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
     def restore(self, request, pk=None):
@@ -548,7 +538,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def versions(self, request, pk=None):
-        """Получить все версии статьи (только для пользователей с полными правами на категорию)"""
+        """Получить все версии статьи (только для пользователей с правами редактирования)"""
         article = self.get_object()
         
         # Проверяем права на просмотр версий
@@ -558,13 +548,13 @@ class ArticleViewSet(viewsets.ModelViewSet):
             serializer = ArticleVersionSerializer(versions, many=True)
             return Response(serializer.data)
         
-        # Проверяем права через группы на категорию
+        # Проверяем системные права через группы
         from .permissions import ArticlePermission
         permission_checker = ArticlePermission()
-        category_permission = permission_checker._get_category_permission_level(request.user, article.category)
+        system_permission = permission_checker._get_system_permission_level(request.user)
         
-        # Только пользователи с полными правами (full) могут просматривать версии
-        if category_permission == 'full':
+        # Только пользователи с правами редактирования (edit) могут просматривать версии
+        if system_permission == 'edit':
             versions = article.versions.all()
             serializer = ArticleVersionSerializer(versions, many=True)
             return Response(serializer.data)
@@ -589,7 +579,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         
         try:
             version = article.versions.get(id=version_id)
-            article.title = version.title
+            article.model_name = version.model_name
             article.content = version.content
             article.summary = version.summary
             article.save()
@@ -600,7 +590,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
             
             ArticleVersion.objects.create(
                 article=article,
-                title=article.title,
+                model_name=article.model_name,
                 content=article.content,
                 summary=article.summary,
                 version_number=new_version_number,
@@ -845,25 +835,23 @@ class ArticleVersionViewSet(viewsets.ReadOnlyModelViewSet):
         if user.is_superuser:
             return queryset.select_related('article', 'author')
         
-        # Фильтруем версии по правам на категорию статьи
+        # Фильтруем версии по системным правам
         from .permissions import ArticlePermission
         permission_checker = ArticlePermission()
         
-        # Получаем статьи, на которые у пользователя есть полные права
+        # Получаем системные права пользователя
+        system_permission = permission_checker._get_system_permission_level(user)
+        
+        # Только пользователи с правами редактирования (edit) имеют доступ к версиям
+        if system_permission == 'edit':
+            return queryset.select_related('article', 'author')
+        
+        # Пользователи с read или без прав - показываем только версии своих статей
         allowed_articles = []
-        for version in queryset.select_related('article', 'article__category', 'author'):
+        for version in queryset.select_related('article', 'author'):
             article = version.article
-            
             # Автор статьи имеет доступ к версиям
             if article.author == user:
-                allowed_articles.append(version.id)
-                continue
-            
-            # Проверяем права через группы на категорию
-            category_permission = permission_checker._get_category_permission_level(user, article.category)
-            
-            # Только полные права (full) дают доступ к версиям
-            if category_permission == 'full':
                 allowed_articles.append(version.id)
         
         return queryset.filter(id__in=allowed_articles).select_related('article', 'author')
@@ -888,98 +876,36 @@ class ArticleImageViewSet(viewsets.ModelViewSet):
         serializer.save(uploaded_by=self.request.user)
 
 
-class SectionViewSet(viewsets.ReadOnlyModelViewSet):
+class TechnologyViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet для просмотра разделов (только чтение, создание/редактирование через админку)
-    Показывает только разделы с категориями, на которые у пользователя есть доступ
+    ViewSet для просмотра технологий (только чтение, создание/редактирование через админку)
+    Показывает все технологии (права проверяются на уровне статей)
     """
-    serializer_class = SectionSerializer
+    serializer_class = TechnologySerializer
     permission_classes = [permissions.IsAuthenticated]  # Требуется авторизация
     
     def get_queryset(self):
-        """
-        Фильтрует разделы, показывая только те, в которых есть категории с доступом
-        """
-        user = self.request.user
-        
-        # Суперпользователи видят все разделы
-        if user.is_superuser:
-            return Section.objects.all().order_by('sort_order', 'name').prefetch_related('categories')
-        
-        # Получаем все группы пользователя
-        user_groups = user.article_groups.all()
-        
-        if not user_groups.exists():
-            # Если пользователь не в группах, не показываем разделы
-            return Section.objects.none()
-        
-        # Получаем права групп на категории (read или full)
-        category_permissions = CategoryPermission.objects.filter(
-            group__in=user_groups,
-            permission_level__in=['read', 'full']
-        ).values_list('category_id', flat=True).distinct()
-        
-        if not category_permissions:
-            # Нет категорий с доступом
-            return Section.objects.none()
-        
-        # Получаем разделы, в которых есть категории с доступом
-        from .models import Category
-        accessible_categories = Category.objects.filter(id__in=category_permissions)
-        section_ids = accessible_categories.values_list('section_id', flat=True).distinct()
-        
-        # Возвращаем только разделы с доступными категориями
-        return Section.objects.filter(
-            id__in=section_ids
-        ).order_by('sort_order', 'name').prefetch_related('categories')
+        """Возвращает все технологии"""
+        return Technology.objects.all().order_by('sort_order', 'name').prefetch_related('elements')
     
     def get_serializer_context(self):
-        """Передаем request в контекст сериализатора для фильтрации категорий"""
+        """Передаем request в контекст сериализатора для фильтрации элементов"""
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
 
 
-class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
+class ElementViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet для просмотра категорий (только чтение, создание/редактирование через админку)
-    Показывает только те категории, на которые у пользователя есть хотя бы доступ на чтение
+    ViewSet для просмотра элементов (только чтение, создание/редактирование через админку)
+    Показывает все элементы (права проверяются на уровне статей)
     """
-    serializer_class = CategorySerializer
+    serializer_class = ElementSerializer
     permission_classes = [permissions.IsAuthenticated]  # Требуется авторизация
     
     def get_queryset(self):
-        """
-        Фильтрует категории по правам доступа пользователя
-        Показывает только категории, на которые есть хотя бы read доступ через группы
-        """
-        user = self.request.user
-        
-        # Суперпользователи видят все категории
-        if user.is_superuser:
-            return Category.objects.all().order_by('section', 'sort_order', 'name').select_related('section')
-        
-        # Получаем все группы пользователя
-        user_groups = user.article_groups.all()
-        
-        if not user_groups.exists():
-            # Если пользователь не в группах, не показываем категории
-            return Category.objects.none()
-        
-        # Получаем права групп на категории (read или full)
-        category_permissions = CategoryPermission.objects.filter(
-            group__in=user_groups,
-            permission_level__in=['read', 'full']
-        ).values_list('category_id', flat=True).distinct()
-        
-        if not category_permissions:
-            # Нет категорий с доступом
-            return Category.objects.none()
-        
-        # Возвращаем только категории с доступом
-        return Category.objects.filter(
-            id__in=category_permissions
-        ).order_by('section', 'sort_order', 'name').select_related('section')
+        """Возвращает все элементы"""
+        return Element.objects.all().order_by('technology', 'sort_order', 'name').select_related('technology')
     
     def get_serializer_context(self):
         """Передает request в контекст сериализатора для определения прав пользователя"""
@@ -1045,7 +971,7 @@ class GroupViewSet(viewsets.ModelViewSet):
     """
     ViewSet для управления группами пользователей
     """
-    queryset = Group.objects.all().prefetch_related('users', 'category_permissions__category')
+    queryset = Group.objects.all().prefetch_related('users')
     permission_classes = [permissions.IsAuthenticated]
     
     def get_serializer_class(self):
@@ -1054,7 +980,7 @@ class GroupViewSet(viewsets.ModelViewSet):
         return GroupSerializer
     
     def get_queryset(self):
-        queryset = Group.objects.all().prefetch_related('users', 'category_permissions__category')
+        queryset = Group.objects.all().prefetch_related('users')
         
         # Поиск по названию
         search = self.request.query_params.get('search', None)
@@ -1069,31 +995,80 @@ class GroupViewSet(viewsets.ModelViewSet):
         return queryset.order_by('name')
 
 
-class CategoryPermissionViewSet(viewsets.ModelViewSet):
+class ArticleTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet для управления правами групп на категории
+    ViewSet для просмотра шаблонов статей (только чтение, создание/редактирование через админку)
     """
-    queryset = CategoryPermission.objects.all().select_related('group', 'category')
-    serializer_class = CategoryPermissionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    queryset = ArticleTemplate.objects.all().order_by('name')
+    serializer_class = ArticleTemplateSerializer
+    permission_classes = [permissions.IsAuthenticated]  # Требуется авторизация
+
+
+class CommentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet для управления комментариями к статьям
+    Комментировать можно только опубликованные статьи
+    Доступ имеют пользователи с правами read/edit
+    """
+    queryset = Comment.objects.all()
+    serializer_class = CommentSerializer
+    permission_classes = [ArticlePermission]
     
     def get_queryset(self):
-        queryset = CategoryPermission.objects.all().select_related('group', 'category')
+        """Фильтруем комментарии по статье"""
+        # Для операций list (GET /comments/) возвращаем только родительские комментарии
+        # Для операций retrieve, update, destroy (GET/PUT/PATCH/DELETE /comments/{id}/) возвращаем все комментарии
+        if self.action == 'list':
+            queryset = Comment.objects.filter(parent__isnull=True).select_related('author', 'article', 'parent').prefetch_related('referenced_comments', 'replies')
+            article_id = self.request.query_params.get('article', None)
+            if article_id:
+                queryset = queryset.filter(article_id=article_id)
+            return queryset.order_by('created_at')
+        else:
+            # Для других операций (retrieve, update, destroy) возвращаем все комментарии
+            queryset = Comment.objects.all().select_related('author', 'article', 'parent').prefetch_related('referenced_comments', 'replies')
+            return queryset
+    
+    def perform_create(self, serializer):
+        """Создание комментария с проверкой прав"""
+        article = serializer.validated_data['article']
         
-        # Фильтр по группе
-        group_id = self.request.query_params.get('group', None)
-        if group_id:
-            queryset = queryset.filter(group_id=group_id)
+        # Проверяем, что статья опубликована
+        if not article.is_published:
+            raise ValidationError({
+                'article': 'Комментировать можно только опубликованные статьи'
+            })
         
-        # Фильтр по категории
-        category_id = self.request.query_params.get('category', None)
-        if category_id:
-            queryset = queryset.filter(category_id=category_id)
+        # Проверяем права доступа через ArticlePermission
+        from .permissions import ArticlePermission
+        permission_checker = ArticlePermission()
         
-        # Фильтр по уровню прав
-        permission_level = self.request.query_params.get('permission_level', None)
-        if permission_level:
-            queryset = queryset.filter(permission_level=permission_level)
+        user = self.request.user
+        if not user.is_superuser:
+            system_permission = permission_checker._get_system_permission_level(user)
+            if system_permission not in ['read', 'edit']:
+                raise permissions.PermissionDenied('У вас нет прав на комментирование статей')
         
-        return queryset.order_by('group__name', 'category__name')
+        serializer.save(author=user)
+    
+    def perform_update(self, serializer):
+        """Обновление комментария - только автор может редактировать"""
+        comment = self.get_object()
+        user = self.request.user
+        
+        # Только автор может редактировать свой комментарий
+        if comment.author != user and not user.is_superuser:
+            raise permissions.PermissionDenied('Вы можете редактировать только свои комментарии')
+        
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        """Удаление комментария - только автор может удалять"""
+        user = self.request.user
+        
+        # Только автор может удалять свой комментарий
+        if instance.author != user and not user.is_superuser:
+            raise permissions.PermissionDenied('Вы можете удалять только свои комментарии')
+        
+        instance.delete()
 

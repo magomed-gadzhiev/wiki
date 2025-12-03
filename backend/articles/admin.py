@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
+from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Element, Technology, Tag, ArticleOption, ArticleOptionValue, Group, ArticleTemplate, Comment
 
 
 # Импортируем admin_site внутри функций регистрации, чтобы избежать циклических зависимостей
@@ -7,34 +7,32 @@ def register_models():
     """Регистрируем модели в кастомном admin_site"""
     from wiki_backend.admin import admin_site
     
-    class SectionAdmin(admin.ModelAdmin):
-        list_display = ['name', 'slug', 'sort_order', 'created_at']
+    class TechnologyAdmin(admin.ModelAdmin):
+        list_display = ['name', 'sort_order', 'created_at']
         list_editable = ['sort_order']
         list_filter = ['created_at']
-        search_fields = ['name', 'slug', 'description']
-        prepopulated_fields = {'slug': ('name',)}
+        search_fields = ['name']
         readonly_fields = ['id', 'created_at']
         
         fieldsets = (
             ('Основная информация', {
-                'fields': ('name', 'slug', 'description', 'sort_order')
+                'fields': ('name', 'sort_order')
             }),
             ('Метаданные', {
                 'fields': ('id', 'created_at')
             }),
         )
     
-    class CategoryAdmin(admin.ModelAdmin):
-        list_display = ['name', 'slug', 'section', 'sort_order', 'created_at']
+    class ElementAdmin(admin.ModelAdmin):
+        list_display = ['name', 'technology', 'sort_order', 'created_at']
         list_editable = ['sort_order']
-        list_filter = ['section', 'created_at']
-        search_fields = ['name', 'slug', 'description']
-        prepopulated_fields = {'slug': ('name',)}
+        list_filter = ['technology', 'created_at']
+        search_fields = ['name']
         readonly_fields = ['id', 'created_at']
         
         fieldsets = (
             ('Основная информация', {
-                'fields': ('name', 'slug', 'description', 'section', 'sort_order')
+                'fields': ('name', 'technology', 'sort_order')
             }),
             ('Метаданные', {
                 'fields': ('id', 'created_at')
@@ -57,15 +55,15 @@ def register_models():
         )
     
     class ArticleAdmin(admin.ModelAdmin):
-        list_display = ['title', 'category', 'author', 'is_published', 'view_count', 'created_at', 'updated_at']
-        list_filter = ['is_published', 'category', 'created_at', 'updated_at']
-        search_fields = ['title', 'content']
+        list_display = ['model_name', 'element', 'author', 'is_published', 'view_count', 'created_at', 'updated_at']
+        list_filter = ['is_published', 'element', 'created_at', 'updated_at']
+        search_fields = ['model_name', 'content']
         filter_horizontal = ['can_view', 'can_edit', 'can_delete', 'tags']
         readonly_fields = ['id', 'created_at', 'updated_at', 'view_count']
         
         fieldsets = (
             ('Основная информация', {
-                'fields': ('title', 'summary', 'content', 'category', 'author', 'is_published')
+                'fields': ('model_name', 'summary', 'content', 'element', 'author', 'is_published')
             }),
             ('Теги', {
                 'fields': ('tags',)
@@ -81,12 +79,12 @@ def register_models():
     class ArticleVersionAdmin(admin.ModelAdmin):
         list_display = ['article', 'version_number', 'author', 'created_at']
         list_filter = ['created_at']
-        search_fields = ['article__title', 'content']
+        search_fields = ['article__model_name', 'content']
         readonly_fields = ['id', 'created_at']
         
         fieldsets = (
             ('Основная информация', {
-                'fields': ('article', 'version_number', 'title', 'summary', 'content', 'author', 'change_description')
+                'fields': ('article', 'version_number', 'model_name', 'summary', 'content', 'author', 'change_description')
             }),
             ('Метаданные', {
                 'fields': ('id', 'created_at')
@@ -96,13 +94,13 @@ def register_models():
     class ArticleImageAdmin(admin.ModelAdmin):
         list_display = ['article', 'image', 'alt_text', 'uploaded_by', 'uploaded_at']
         list_filter = ['uploaded_at']
-        search_fields = ['article__title', 'alt_text']
+        search_fields = ['article__model_name', 'alt_text']
         readonly_fields = ['id', 'uploaded_at']
     
     class ArticleAttachmentAdmin(admin.ModelAdmin):
         list_display = ['article', 'filename', 'file_size', 'uploaded_by', 'uploaded_at']
         list_filter = ['uploaded_at']
-        search_fields = ['article__title', 'filename', 'comment']
+        search_fields = ['article__model_name', 'filename', 'comment']
         readonly_fields = ['id', 'filename', 'file_size', 'uploaded_at']
         fields = ['article', 'file', 'filename', 'file_size', 'comment', 'uploaded_by', 'uploaded_at']
     
@@ -124,7 +122,7 @@ def register_models():
     class ArticleOptionValueAdmin(admin.ModelAdmin):
         list_display = ['article', 'option', 'value', 'updated_at']
         list_filter = ['option', 'updated_at']
-        search_fields = ['article__title', 'option__name', 'value']
+        search_fields = ['article__model_name', 'option__name', 'value']
         readonly_fields = ['id', 'created_at', 'updated_at']
         
         fieldsets = (
@@ -137,15 +135,15 @@ def register_models():
         )
     
     class GroupAdmin(admin.ModelAdmin):
-        list_display = ['name', 'users_count', 'created_at', 'updated_at']
-        list_filter = ['created_at', 'updated_at']
+        list_display = ['name', 'system_permission_level', 'users_count', 'created_at', 'updated_at']
+        list_filter = ['system_permission_level', 'created_at', 'updated_at']
         search_fields = ['name', 'description']
         filter_horizontal = ['users']
         readonly_fields = ['id', 'created_at', 'updated_at']
         
         fieldsets = (
             ('Основная информация', {
-                'fields': ('name', 'description')
+                'fields': ('name', 'description', 'system_permission_level')
             }),
             ('Пользователи', {
                 'fields': ('users',)
@@ -159,15 +157,33 @@ def register_models():
             return obj.users.count()
         users_count.short_description = 'Количество пользователей'
     
-    class CategoryPermissionAdmin(admin.ModelAdmin):
-        list_display = ['group', 'category', 'permission_level', 'created_at', 'updated_at']
-        list_filter = ['permission_level', 'created_at', 'updated_at']
-        search_fields = ['group__name', 'category__name']
+    class ArticleTemplateAdmin(admin.ModelAdmin):
+        list_display = ['name', 'created_at', 'updated_at']
+        search_fields = ['name']
         readonly_fields = ['id', 'created_at', 'updated_at']
         
         fieldsets = (
             ('Основная информация', {
-                'fields': ('group', 'category', 'permission_level')
+                'fields': ('name', 'html')
+            }),
+            ('Метаданные', {
+                'fields': ('id', 'created_at', 'updated_at')
+            }),
+        )
+    
+    class CommentAdmin(admin.ModelAdmin):
+        list_display = ['article', 'author', 'created_at', 'parent']
+        list_filter = ['created_at', 'article']
+        search_fields = ['content', 'article__model_name', 'author__username']
+        readonly_fields = ['id', 'created_at', 'updated_at']
+        filter_horizontal = ['referenced_comments']
+        
+        fieldsets = (
+            ('Основная информация', {
+                'fields': ('article', 'author', 'content', 'parent')
+            }),
+            ('Ссылки', {
+                'fields': ('referenced_comments',)
             }),
             ('Метаданные', {
                 'fields': ('id', 'created_at', 'updated_at')
@@ -175,8 +191,8 @@ def register_models():
         )
     
     # Регистрируем все модели
-    admin_site.register(Section, SectionAdmin)
-    admin_site.register(Category, CategoryAdmin)
+    admin_site.register(Technology, TechnologyAdmin)
+    admin_site.register(Element, ElementAdmin)
     admin_site.register(Tag, TagAdmin)
     admin_site.register(Article, ArticleAdmin)
     admin_site.register(ArticleVersion, ArticleVersionAdmin)
@@ -185,7 +201,8 @@ def register_models():
     admin_site.register(ArticleOption, ArticleOptionAdmin)
     admin_site.register(ArticleOptionValue, ArticleOptionValueAdmin)
     admin_site.register(Group, GroupAdmin)
-    admin_site.register(CategoryPermission, CategoryPermissionAdmin)
+    admin_site.register(ArticleTemplate, ArticleTemplateAdmin)
+    admin_site.register(Comment, CommentAdmin)
 
 
 # Вызываем регистрацию при импорте модуля

@@ -1,0 +1,89 @@
+<div class="container-fluid">
+  <div class="article-list-header" *ngIf="element">
+    <div>
+      <h1>{{ element.name }}</h1>
+    </div>
+    <div class="actions">
+      <input 
+        type="text" 
+        placeholder="Поиск..." 
+        [(ngModel)]="searchQuery"
+        (input)="onSearch()"
+        class="search-input"
+        [ngModelOptions]="{standalone: true}"
+      />
+      <div class="view-toggle">
+        <button 
+          class="view-btn" 
+          [class.active]="viewMode === 'grid'"
+          (click)="viewMode = 'grid'"
+          title="Плитка"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            <rect x="11" y="2" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            <rect x="2" y="11" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            <rect x="11" y="11" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          </svg>
+        </button>
+        <button 
+          class="view-btn" 
+          [class.active]="viewMode === 'list'"
+          (click)="viewMode = 'list'"
+          title="Список"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="3" width="16" height="2" rx="1" fill="currentColor"/>
+            <rect x="2" y="9" width="16" height="2" rx="1" fill="currentColor"/>
+            <rect x="2" y="15" width="16" height="2" rx="1" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+      <a *ngIf="isAuthenticated()" [routerLink]="['/elements', element.id, 'articles', 'new']" class="btn btn-primary">
+        Новая статья
+      </a>
+    </div>
+  </div>
+  
+  <app-article-filters
+    [selectedTagIds]="selectedTagIds"
+    [selectedOptionFilters]="selectedOptionFilters"
+    (tagIdsChange)="selectedTagIds = $event"
+    (optionFiltersChange)="selectedOptionFilters = $event"
+    (filterChange)="onFilterChange()"
+  ></app-article-filters>
+  
+  <div *ngIf="loading" class="loading">Загрузка...</div>
+  
+  <div *ngIf="!loading && articles.length === 0" class="empty-state">
+    <p>В этом элементе пока нет статей</p>
+  </div>
+  
+  <div 
+    [class.article-grid]="viewMode === 'grid'"
+    [class.article-list]="viewMode === 'list'"
+    *ngIf="!loading && articles.length > 0"
+  >
+    <div class="card article-card" [class.draft-card]="!article.is_published" *ngFor="let article of articles">
+      <div class="article-header">
+        <h3>
+          <span *ngIf="article.element?.technology">
+            <a [routerLink]="['/technologies', article.element?.technology?.id]" class="hierarchy-link">{{ article.element?.technology?.name }}</a> / 
+          </span>
+          <span *ngIf="article.element">
+            <a [routerLink]="['/elements', article.element.id]" class="hierarchy-link">{{ article.element.name }}</a> / 
+          </span>
+          <a [routerLink]="['/articles', article.id]">{{ article.model_name }}</a>
+        </h3>
+      </div>
+      <p class="summary">{{ article.summary || 'Нет описания' }}</p>
+      <div class="article-options" *ngIf="article.option_values && article.option_values.length > 0">
+        <div class="option-item" *ngFor="let optionValue of article.option_values">
+          <span class="option-name">{{ optionValue.option.name }}:</span>
+          <span class="option-value">{{ optionValue.value }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

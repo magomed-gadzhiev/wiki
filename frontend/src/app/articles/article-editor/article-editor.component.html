@@ -1,0 +1,299 @@
+<div class="container-fluid">
+  <h1>{{ isEditMode ? 'Редактирование статьи' : 'Новая статья' }}</h1>
+  
+  <form [formGroup]="articleForm" (ngSubmit)="onSubmit()">
+    <div class="card">
+      <div class="form-group">
+        <label for="model_name">Модель *</label>
+        <input 
+          id="model_name" 
+          type="text" 
+          formControlName="model_name"
+          [class.error]="articleForm.get('model_name')?.invalid && articleForm.get('model_name')?.touched"
+        />
+        <div *ngIf="articleForm.get('model_name')?.invalid && articleForm.get('model_name')?.touched" class="error-message">
+          Модель обязательна
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="summary">Краткое описание</label>
+        <textarea 
+          id="summary" 
+          formControlName="summary"
+          rows="3"
+        ></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label for="element_id">Элемент</label>
+        <select 
+          id="element_id" 
+          formControlName="element_id"
+        >
+          <option [ngValue]="null">-- Без элемента --</option>
+          <option *ngFor="let element of (availableElementsForCreation || []); trackBy: trackByElementId" [ngValue]="element.id">
+            {{ element.name }}
+          </option>
+        </select>
+        <div *ngIf="elementSelectionError" class="error-message" style="margin-top: 5px;">
+          {{ elementSelectionError }}
+        </div>
+        <div *ngIf="articleForm.get('element_id')?.value && !elementSelectionError" style="font-size: 12px; color: #666; margin-top: 5px;">
+          Текущее значение: {{ articleForm.get('element_id')?.value }}
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label>Опции статьи</label>
+        <div class="options-table-container">
+          <table class="table table-bordered options-table">
+            <thead>
+              <tr>
+                <th style="width: 40%;">Опция</th>
+                <th style="width: 50%;">Значение</th>
+                <th style="width: 10%;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let optionValue of optionValuesList; let i = index">
+                <td>
+                  <select 
+                    [(ngModel)]="optionValue.option_id"
+                    [ngModelOptions]="{standalone: true}"
+                    class="form-control form-control-sm"
+                    [disabled]="!!optionValue.id"
+                  >
+                    <option [ngValue]="null">-- Выберите опцию --</option>
+                    <option *ngFor="let option of getAvailableOptions(optionValue.option_id, i)" [ngValue]="option.id">
+                      {{ option.name }}
+                      <span *ngIf="option.description"> - {{ option.description }}</span>
+                    </option>
+                  </select>
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    [(ngModel)]="optionValue.value"
+                    [ngModelOptions]="{standalone: true}"
+                    class="form-control form-control-sm"
+                    placeholder="Введите значение"
+                  />
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-danger"
+                    (click)="removeOptionValue(i)"
+                    title="Удалить"
+                  >
+                    ×
+                  </button>
+                </td>
+              </tr>
+              <tr *ngIf="optionValuesList.length === 0">
+                <td colspan="3" class="text-center text-muted">
+                  Нет добавленных опций
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary add-option-btn"
+            (click)="addOptionValue()"
+          >
+            + Добавить опцию
+          </button>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="tags">Теги</label>
+        <div class="tags-container">
+          <div class="tags-input-wrapper">
+            <input 
+              type="text" 
+              id="tag-input"
+              [(ngModel)]="newTagName"
+              (keydown.enter)="addNewTag($event)"
+              (keydown.arrowdown)="navigateSuggestions($event, 1)"
+              (keydown.arrowup)="navigateSuggestions($event, -1)"
+              (keydown.escape)="hideSuggestions()"
+              (input)="searchTags($event)"
+              (focus)="onTagInputFocus()"
+              (blur)="onTagInputBlur()"
+              placeholder="Введите название тега или выберите из списка"
+              class="tag-input"
+              [ngModelOptions]="{standalone: true}"
+            />
+            <div class="tags-suggestions" *ngIf="tagSuggestions.length > 0 && showTagSuggestions" (mousedown)="$event.preventDefault()">
+              <div 
+                *ngFor="let tag of tagSuggestions; let i = index" 
+                class="tag-suggestion"
+                [class.selected]="i === selectedSuggestionIndex"
+                (click)="selectTag(tag)"
+                (mouseenter)="selectedSuggestionIndex = i"
+              >
+                <span class="tag-suggestion-icon">🏷️</span>
+                <span class="tag-suggestion-name">{{ tag.name }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="selected-tags" *ngIf="selectedTags.length > 0">
+            <span 
+              *ngFor="let tag of selectedTags" 
+              class="badge bg-primary tag-badge"
+            >
+              {{ tag.name }}
+              <button type="button" class="tag-remove" (click)="removeTag(tag)">×</button>
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="content">Содержимое *</label>
+        <div #gjsEditor id="gjs-editor" style="min-height: 500px;"></div>
+
+        <div *ngIf="articleForm.get('content')?.invalid && articleForm.get('content')?.touched" class="error-message">
+          Содержимое обязательно
+        </div>
+      </div>
+      
+      <div class="form-group" *ngIf="isEditMode">
+        <div *ngIf="isPublished" class="info-message published">
+          ✓ Статья опубликована
+        </div>
+        <div *ngIf="!isPublished" class="info-message draft">
+          ⚠ Статья находится в черновиках
+        </div>
+      </div>
+      
+      <div class="form-group" *ngIf="isEditMode">
+        <label for="change_description">Описание изменений (опционально)</label>
+        <textarea 
+          id="change_description" 
+          formControlName="change_description"
+          rows="2"
+          placeholder="Опишите, что было изменено в этой версии"
+        ></textarea>
+      </div>
+      
+      <div class="form-group" *ngIf="isEditMode && articleId">
+        <label>Вложения к статье</label>
+        <div class="attachments-section">
+          <div class="attachment-upload">
+            <input 
+              type="file" 
+              #attachmentInput
+              id="attachmentInput"
+              style="display: none"
+              (change)="onAttachmentFileSelected($event)"
+            />
+            <div class="upload-controls">
+              <button 
+                type="button" 
+                class="btn btn-sm btn-primary"
+                (click)="attachmentInput.click()"
+                [disabled]="uploadingAttachment"
+              >
+                {{ uploadingAttachment ? 'Загрузка...' : '📎 Загрузить файл' }}
+              </button>
+              <span class="file-size-hint">Максимальный размер: 50 МБ</span>
+            </div>
+            <div class="attachment-comment-input" *ngIf="selectedAttachmentFile">
+              <label for="attachment-comment">Комментарий к файлу (опционально):</label>
+              <textarea 
+                id="attachment-comment"
+                [(ngModel)]="attachmentComment"
+                [ngModelOptions]="{standalone: true}"
+                rows="2"
+                placeholder="Введите комментарий к файлу"
+                class="form-control"
+              ></textarea>
+              <div class="attachment-actions">
+                <button 
+                  type="button" 
+                  class="btn btn-sm btn-success"
+                  (click)="uploadAttachment()"
+                  [disabled]="uploadingAttachment"
+                >
+                  Загрузить
+                </button>
+                <button 
+                  type="button" 
+                  class="btn btn-sm btn-secondary"
+                  (click)="cancelAttachmentUpload()"
+                  [disabled]="uploadingAttachment"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+            <div *ngIf="attachmentUploadError" class="error-message">
+              {{ attachmentUploadError }}
+            </div>
+          </div>
+          
+          <div class="attachments-list" *ngIf="attachments && attachments.length > 0">
+            <div class="attachment-item" *ngFor="let attachment of attachments">
+              <div class="attachment-info">
+                <a [href]="attachment.file_url" target="_blank" class="attachment-link">
+                  <span class="attachment-icon">📎</span>
+                  <span class="attachment-filename">{{ attachment.filename }}</span>
+                </a>
+                <div class="attachment-meta">
+                  <span class="attachment-size">{{ attachment.file_size_display }}</span>
+                  <span class="attachment-date">{{ attachment.uploaded_at | date:'dd.MM.yyyy, HH:mm' }}</span>
+                  <span class="attachment-uploader">Загрузил: {{ attachment.uploaded_by_username }}</span>
+                </div>
+                <div class="attachment-comment" *ngIf="attachment.comment">
+                  <strong>Комментарий:</strong> {{ attachment.comment }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" [disabled]="articleForm.invalid || saving">
+          {{ saving ? 'Сохранение...' : 'Сохранить' }}
+        </button>
+        <button 
+          *ngIf="isEditMode && !isPublished" 
+          type="button" 
+          class="btn btn-success" 
+          (click)="publishArticle()"
+          [disabled]="publishing"
+        >
+          {{ publishing ? 'Публикация...' : 'Опубликовать' }}
+        </button>
+        <button 
+          *ngIf="isEditMode && isPublished" 
+          type="button" 
+          class="btn btn-warning" 
+          (click)="unpublishArticle()"
+          [disabled]="unpublishing"
+        >
+          {{ unpublishing ? 'Снятие с публикации...' : 'Снять с публикации' }}
+        </button>
+        <button type="button" class="btn btn-secondary" (click)="cancel()">Отмена</button>
+        <button type="button" class="btn btn-secondary" (click)="importWord()">Импорт из Word</button>
+      </div>
+    </div>
+    
+    <div *ngIf="error" class="error-message">{{ error }}</div>
+  </form>
+  
+  <input 
+    type="file" 
+    #fileInput 
+    accept=".doc,.docx" 
+    style="display: none"
+    (change)="onWordFileSelected($event)"
+  />
+  
+</div>
+

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
-from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Section, Tag, ArticleOption, ArticleOptionValue, Group, CategoryPermission
+from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Element, Technology, Tag, ArticleOption, ArticleOptionValue, Group, ArticleTemplate, Comment
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -11,116 +11,43 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'first_name', 'last_name', 'email']
 
 
-class CategorySimpleSerializer(serializers.ModelSerializer):
-    """Упрощенный сериализатор категории без раздела (для использования в SectionSerializer)"""
+class ElementSimpleSerializer(serializers.ModelSerializer):
+    """Упрощенный сериализатор элемента без технологии (для использования в TechnologySerializer)"""
     class Meta:
-        model = Category
-        fields = ['id', 'name', 'slug', 'description', 'sort_order', 'created_at']
+        model = Element
+        fields = ['id', 'name', 'sort_order', 'created_at']
         read_only_fields = ['id', 'created_at']
 
 
-class SectionSerializer(serializers.ModelSerializer):
-    categories = serializers.SerializerMethodField()
+class TechnologySerializer(serializers.ModelSerializer):
+    elements = serializers.SerializerMethodField()
     
     class Meta:
-        model = Section
-        fields = ['id', 'name', 'slug', 'description', 'sort_order', 'created_at', 'categories']
+        model = Technology
+        fields = ['id', 'name', 'sort_order', 'created_at', 'elements']
         read_only_fields = ['id', 'created_at']
     
-    def get_categories(self, obj):
-        """Возвращает список категорий раздела, на которые у пользователя есть доступ"""
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return []
-        
-        user = request.user
-        
-        # Суперпользователи видят все категории
-        if user.is_superuser:
-            categories = obj.categories.all().order_by('sort_order', 'name')
-            return CategorySimpleSerializer(categories, many=True).data
-        
-        # Получаем все группы пользователя
-        user_groups = user.article_groups.all()
-        
-        if not user_groups.exists():
-            # Если пользователь не в группах, не показываем категории
-            return []
-        
-        # Получаем права групп на категории (read или full)
-        from .models import CategoryPermission
-        category_permissions = CategoryPermission.objects.filter(
-            group__in=user_groups,
-            permission_level__in=['read', 'full'],
-            category__section=obj
-        ).values_list('category_id', flat=True).distinct()
-        
-        if not category_permissions:
-            # Нет категорий с доступом в этом разделе
-            return []
-        
-        # Фильтруем категории по правам доступа
-        categories = obj.categories.filter(
-            id__in=category_permissions
-        ).order_by('sort_order', 'name')
-        
-        return CategorySimpleSerializer(categories, many=True).data
+    def get_elements(self, obj):
+        """Возвращает список всех элементов технологии"""
+        elements = obj.elements.all().order_by('sort_order', 'name')
+        return ElementSimpleSerializer(elements, many=True).data
 
 
-class SectionSimpleSerializer(serializers.ModelSerializer):
-    """Упрощенный сериализатор раздела без категорий (для использования в CategorySerializer)"""
+class TechnologySimpleSerializer(serializers.ModelSerializer):
+    """Упрощенный сериализатор технологии без элементов (для использования в ElementSerializer)"""
     class Meta:
-        model = Section
-        fields = ['id', 'name', 'slug', 'description', 'sort_order', 'created_at']
+        model = Technology
+        fields = ['id', 'name', 'sort_order', 'created_at']
         read_only_fields = ['id', 'created_at']
 
 
-class CategorySerializer(serializers.ModelSerializer):
-    section = SectionSimpleSerializer(read_only=True)
-    user_permission_level = serializers.SerializerMethodField()
+class ElementSerializer(serializers.ModelSerializer):
+    technology = TechnologySimpleSerializer(read_only=True)
     
     class Meta:
-        model = Category
-        fields = ['id', 'name', 'slug', 'description', 'section', 'sort_order', 'created_at', 'user_permission_level']
-        read_only_fields = ['id', 'created_at', 'user_permission_level']
-    
-    def get_user_permission_level(self, obj):
-        """
-        Определяет максимальный уровень прав пользователя на категорию через группы.
-        Возвращает: 'none', 'read', 'full' или None (если категории нет или нет прав через группы)
-        """
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return None
-        
-        user = request.user
-        
-        # Суперпользователи имеют полные права
-        if user.is_superuser:
-            return 'full'
-        
-        # Получаем все группы пользователя
-        user_groups = user.article_groups.all()
-        if not user_groups.exists():
-            return None
-        
-        # Получаем все права групп пользователя на эту категорию
-        permissions = CategoryPermission.objects.filter(
-            group__in=user_groups,
-            category=obj
-        ).values_list('permission_level', flat=True)
-        
-        if not permissions:
-            return None
-        
-        # Определяем максимальный уровень прав
-        # Приоритет: full > read > none
-        if 'full' in permissions:
-            return 'full'
-        elif 'read' in permissions:
-            return 'read'
-        else:
-            return 'none'
+        model = Element
+        fields = ['id', 'name', 'technology', 'sort_order', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -227,14 +154,14 @@ class ArticleVersionSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ArticleVersion
-        fields = ['id', 'article', 'title', 'content', 'summary', 'version_number', 
+        fields = ['id', 'article', 'model_name', 'content', 'summary', 'version_number', 
                   'author', 'created_at', 'change_description']
         read_only_fields = ['id', 'created_at', 'author']
 
 
 class ArticleSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
-    category = CategorySerializer(read_only=True)
+    element = ElementSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     can_view = UserSerializer(many=True, read_only=True)
     can_edit = UserSerializer(many=True, read_only=True)
@@ -245,10 +172,10 @@ class ArticleSerializer(serializers.ModelSerializer):
     versions_count = serializers.IntegerField(source='versions.count', read_only=True)
     latest_version = serializers.SerializerMethodField()
     
-    # Для записи категории
-    category_id = serializers.PrimaryKeyRelatedField(
-        queryset=Category.objects.all(),
-        source='category',
+    # Для записи элемента
+    element_id = serializers.PrimaryKeyRelatedField(
+        queryset=Element.objects.all(),
+        source='element',
         write_only=True,
         required=False,
         allow_null=True
@@ -296,9 +223,9 @@ class ArticleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Article
         fields = [
-            'id', 'title', 'content', 'summary', 'author', 
+            'id', 'model_name', 'content', 'summary', 'author', 
             'created_at', 'updated_at', 'is_published', 'view_count',
-            'category', 'category_id',
+            'element', 'element_id',
             'tags', 'tag_ids',
             'can_view', 'can_edit', 'can_delete',
             'can_view_ids', 'can_edit_ids', 'can_delete_ids',
@@ -307,6 +234,9 @@ class ArticleSerializer(serializers.ModelSerializer):
             'is_deleted', 'deleted_at'
         ]
         read_only_fields = ['id', 'author', 'created_at', 'updated_at', 'view_count', 'is_deleted', 'deleted_at']
+        extra_kwargs = {
+            'content': {'required': False, 'allow_blank': True}
+        }
     
     def get_latest_version(self, obj):
         latest = obj.versions.first()
@@ -317,6 +247,8 @@ class ArticleSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         option_values_data = validated_data.pop('option_values_data', [])
         validated_data['author'] = self.context['request'].user
+        # Все новые статьи создаются как черновики
+        validated_data['is_published'] = False
         article = super().create(validated_data)
         
         # Создаем значения опций
@@ -358,12 +290,12 @@ class ArticleSerializer(serializers.ModelSerializer):
 class ArticleListSerializer(serializers.ModelSerializer):
     """Упрощенный сериализатор для списка статей"""
     author = UserSerializer(read_only=True)
-    category = CategorySerializer(read_only=True)
+    element = ElementSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     
     class Meta:
         model = Article
-        fields = ['id', 'title', 'summary', 'author', 'category', 'tags', 'created_at', 
+        fields = ['id', 'model_name', 'summary', 'author', 'element', 'tags', 'created_at', 
                   'updated_at', 'is_published', 'view_count']
 
 
@@ -371,6 +303,7 @@ class GroupSerializer(serializers.ModelSerializer):
     """Сериализатор для групп пользователей"""
     users = UserSerializer(many=True, read_only=True)
     users_count = serializers.IntegerField(source='users.count', read_only=True)
+    system_permission_level_display = serializers.CharField(source='get_system_permission_level_display', read_only=True)
     user_ids = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=User.objects.all(),
@@ -381,38 +314,16 @@ class GroupSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Group
-        fields = ['id', 'name', 'description', 'users', 'user_ids', 'users_count', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
-
-
-class CategoryPermissionSerializer(serializers.ModelSerializer):
-    """Сериализатор для прав групп на категории"""
-    group = serializers.StringRelatedField(read_only=True)
-    group_id = serializers.PrimaryKeyRelatedField(
-        queryset=Group.objects.all(),
-        source='group',
-        write_only=True
-    )
-    category = CategorySerializer(read_only=True)
-    category_id = serializers.PrimaryKeyRelatedField(
-        queryset=Category.objects.all(),
-        source='category',
-        write_only=True
-    )
-    permission_level_display = serializers.CharField(source='get_permission_level_display', read_only=True)
-    
-    class Meta:
-        model = CategoryPermission
-        fields = ['id', 'group', 'group_id', 'category', 'category_id', 'permission_level', 
-                  'permission_level_display', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'description', 'system_permission_level', 'system_permission_level_display', 
+                  'users', 'user_ids', 'users_count', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class GroupDetailSerializer(serializers.ModelSerializer):
-    """Детальный сериализатор группы с правами на категории"""
+    """Детальный сериализатор группы"""
     users = UserSerializer(many=True, read_only=True)
     users_count = serializers.IntegerField(source='users.count', read_only=True)
-    category_permissions = CategoryPermissionSerializer(many=True, read_only=True)
+    system_permission_level_display = serializers.CharField(source='get_system_permission_level_display', read_only=True)
     user_ids = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=User.objects.all(),
@@ -423,7 +334,117 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Group
-        fields = ['id', 'name', 'description', 'users', 'user_ids', 'users_count', 
-                  'category_permissions', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'description', 'system_permission_level', 'system_permission_level_display',
+                  'users', 'user_ids', 'users_count', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ArticleTemplateSerializer(serializers.ModelSerializer):
+    """Сериализатор для шаблонов статей"""
+    class Meta:
+        model = ArticleTemplate
+        fields = ['id', 'name', 'html', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    """Сериализатор для комментариев"""
+    author = UserSerializer(read_only=True)
+    article = serializers.PrimaryKeyRelatedField(read_only=True)
+    parent = serializers.PrimaryKeyRelatedField(read_only=True)
+    referenced_comments = serializers.SerializerMethodField()
+    replies = serializers.SerializerMethodField()
+    replies_count = serializers.IntegerField(source='replies.count', read_only=True)
+    
+    # Для записи
+    article_id = serializers.PrimaryKeyRelatedField(
+        queryset=Article.objects.all(),
+        source='article',
+        write_only=True
+    )
+    parent_id = serializers.PrimaryKeyRelatedField(
+        queryset=Comment.objects.all(),
+        source='parent',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+    referenced_comment_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Comment.objects.all(),
+        source='referenced_comments',
+        write_only=True,
+        required=False
+    )
+    
+    class Meta:
+        model = Comment
+        fields = [
+            'id', 'article', 'article_id', 'author', 'content', 
+            'parent', 'parent_id', 'referenced_comments', 'referenced_comment_ids',
+            'replies', 'replies_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'author', 'created_at', 'updated_at']
+    
+    def get_referenced_comments(self, obj):
+        """Возвращает список ссылок на комментарии"""
+        referenced = obj.referenced_comments.all()
+        return CommentSimpleSerializer(referenced, many=True, context=self.context).data
+    
+    def get_replies(self, obj):
+        """Возвращает вложенные ответы"""
+        replies = obj.replies.all().order_by('created_at')
+        # Используем CommentSimpleSerializer для избежания бесконечной рекурсии
+        return CommentSimpleSerializer(replies, many=True, context=self.context).data
+    
+    def create(self, validated_data):
+        validated_data['author'] = self.context['request'].user
+        referenced_comment_ids = validated_data.pop('referenced_comments', [])
+        comment = super().create(validated_data)
+        
+        # Добавляем ссылки на комментарии
+        if referenced_comment_ids:
+            comment.referenced_comments.set(referenced_comment_ids)
+        
+        return comment
+    
+    def update(self, instance, validated_data):
+        referenced_comment_ids = validated_data.pop('referenced_comments', None)
+        comment = super().update(instance, validated_data)
+        
+        # Обновляем ссылки на комментарии, если они переданы
+        if referenced_comment_ids is not None:
+            comment.referenced_comments.set(referenced_comment_ids)
+        
+        return comment
+
+
+class CommentSimpleSerializer(serializers.ModelSerializer):
+    """Упрощенный сериализатор комментария (для вложенных комментариев и ссылок)"""
+    author = UserSerializer(read_only=True)
+    referenced_comments = serializers.SerializerMethodField()
+    replies = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Comment
+        fields = ['id', 'author', 'content', 'referenced_comments', 'replies', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'author', 'created_at', 'updated_at']
+    
+    def get_referenced_comments(self, obj):
+        """Возвращает список ссылок на комментарии"""
+        referenced = obj.referenced_comments.all()
+        return [{'id': str(ref.id), 'author': {'username': ref.author.username if ref.author else 'Неизвестный'}} for ref in referenced]
+    
+    def get_replies(self, obj):
+        """Возвращает вложенные ответы (один уровень вложенности)"""
+        replies = obj.replies.all().order_by('created_at')
+        return [{
+            'id': str(reply.id),
+            'author': UserSerializer(reply.author).data if reply.author else None,
+            'content': reply.content,
+            'referenced_comments': [{'id': str(ref.id), 'author': {'username': ref.author.username if ref.author else 'Неизвестный'}} for ref in reply.referenced_comments.all()],
+            'replies': [],  # Не показываем вложенные ответы в ответах, чтобы избежать глубокой рекурсии
+            'created_at': reply.created_at.isoformat() if reply.created_at else None,
+            'updated_at': reply.updated_at.isoformat() if reply.updated_at else None
+        } for reply in replies]
 

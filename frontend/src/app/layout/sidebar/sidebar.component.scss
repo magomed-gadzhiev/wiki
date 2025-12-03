@@ -1,0 +1,100 @@
+.top-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1000;
+  overflow: visible;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.navbar-brand {
+  font-size: 20px;
+  font-weight: 500;
+  color: #007bff !important;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    color: #0056b3 !important;
+    text-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+  }
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-shrink: 0;
+}
+
+.dropdown-toggle {
+  &::after {
+    transition: transform 0.3s ease;
+  }
+  
+  &[aria-expanded="true"] {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    
+    &::after {
+      transform: rotate(180deg);
+    }
+  }
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.username {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+  
+  &:hover {
+    background-color: #0056b3;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+  }
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+  
+  &:hover {
+    background-color: #545b62;
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+  }
+}
+

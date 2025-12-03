@@ -1,0 +1,51 @@
+<div class="container-fluid">
+  <h1>История версий статьи</h1>
+  <a [routerLink]="['/articles', articleId]" class="btn btn-secondary">Назад к статье</a>
+  
+  <div *ngIf="loading" class="loading">Загрузка...</div>
+  
+  <div *ngIf="!loading && versions.length === 0" class="empty-state">
+    <p>Версии не найдены</p>
+  </div>
+  
+  <div class="versions-list" *ngIf="!loading && versions.length > 0">
+    <div class="card version-card" *ngFor="let version of versions">
+      <div class="version-header">
+        <h3>Версия {{ version.version_number }}</h3>
+        <div class="version-meta">
+          <span>Автор: {{ version.author.username }}</span>
+          <span>{{ version.created_at | date:'short' }}</span>
+        </div>
+      </div>
+      
+      <div class="version-description" *ngIf="version.change_description">
+        <strong>Описание изменений:</strong> {{ version.change_description }}
+      </div>
+      
+      <div class="version-content-toggle">
+        <button 
+          class="toggle-btn" 
+          (click)="toggleContent(version.id)"
+          type="button">
+          <span *ngIf="!isExpanded(version.id)">▼</span>
+          <span *ngIf="isExpanded(version.id)">▲</span>
+          {{ isExpanded(version.id) ? 'Свернуть содержимое' : 'Развернуть содержимое' }}
+        </button>
+      </div>
+      
+      <div class="version-content" *ngIf="isExpanded(version.id)">
+        <h4>{{ version.model_name }}</h4>
+        <div [innerHTML]="getSanitizedContent(version.content)"></div>
+      </div>
+      
+      <div class="version-actions">
+        <button class="btn btn-primary" (click)="restoreVersion(version.id)">
+          Восстановить эту версию
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <div *ngIf="error" class="error">{{ error }}</div>
+</div>
+

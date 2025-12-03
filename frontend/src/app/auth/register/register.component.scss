@@ -1,0 +1,36 @@
+.register-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 200px);
+}
+
+.register-card {
+  max-width: 400px;
+  width: 100%;
+}
+
+.register-card h2 {
+  margin-bottom: 20px;
+}
+
+.error-message {
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+input.error {
+  border-color: #dc3545;
+}
+
+.login-link {
+  margin-top: 15px;
+  text-align: center;
+}
+
+.login-link a {
+  color: #007bff;
+  text-decoration: none;
+}
+
