@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { Article, ArticleVersion, ArticleImage, ArticleAttachment, Element, Technology, Tag, ArticleOption, ArticleOptionValue, ArticleTemplate } from '../models/article.model';
+import { Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Model, Technology, Tag, ArticleOption, ArticleOptionValue, ArticleTemplate } from '../models/article.model';
 
 @Injectable({
   providedIn: 'root'
@@ -16,7 +16,7 @@ export class ArticleService {
     search?: string; 
     author?: number; 
     is_published?: boolean;
-    element?: string;
+    model?: string;
     tags?: string[];
     optionFilters?: { option_id: string; option_value: string }[];
   }): Observable<{ results: Article[]; count: number }> {
@@ -30,8 +30,8 @@ export class ArticleService {
     if (params?.is_published !== undefined) {
       httpParams = httpParams.set('is_published', params.is_published.toString());
     }
-    if (params?.element) {
-      httpParams = httpParams.set('element', params.element);
+    if (params?.model) {
+      httpParams = httpParams.set('model', params.model);
     }
     // Фильтр по тегам
     if (params?.tags && params.tags.length > 0) {
@@ -99,15 +99,61 @@ export class ArticleService {
     return this.http.post<{ content: string; warnings: string[] }>(`${this.apiUrl}/import_word/`, formData);
   }
 
-  getElements(): Observable<Element[]> {
-    return this.http.get<{ results: Element[]; count: number } | Element[]>(`${this.apiUrl}/elements/`).pipe(
-      map(response => Array.isArray(response) ? response : response.results)
+  getCategories(): Observable<Category[]> {
+    return this.http.get<Category[]>(`${this.apiUrl}/categories/`).pipe(
+      map(response => {
+        const categories = Array.isArray(response) ? response : [];
+        // Убеждаемся, что у каждой категории есть массив models
+        return categories.map(cat => ({
+          ...cat,
+          models: Array.isArray(cat.models) ? cat.models : []
+        }));
+      })
     );
   }
 
+  getCategory(id: string): Observable<Category> {
+    return this.http.get<Category>(`${this.apiUrl}/categories/${id}/`).pipe(
+      map(cat => ({
+        ...cat,
+        models: Array.isArray(cat.models) ? cat.models : []
+      }))
+    );
+  }
+
+  getModels(params?: { category?: string }): Observable<Model[]> {
+    let httpParams = new HttpParams();
+    if (params?.category) {
+      httpParams = httpParams.set('category', params.category);
+    }
+    return this.http.get<Model[]>(`${this.apiUrl}/models/`, { params: httpParams }).pipe(
+      map(response => Array.isArray(response) ? response : [])
+    );
+  }
+
+  getModel(id: string): Observable<Model> {
+    return this.http.get<Model>(`${this.apiUrl}/models/${id}/`);
+  }
+
   getTechnologies(): Observable<Technology[]> {
-    return this.http.get<{ results: Technology[]; count: number } | Technology[]>(`${this.apiUrl}/technologies/`).pipe(
-      map(response => Array.isArray(response) ? response : response.results)
+    return this.http.get<Technology[]>(`${this.apiUrl}/technologies/`).pipe(
+      map(response => {
+        const technologies = Array.isArray(response) ? response : [];
+        // Убеждаемся, что у каждой технологии есть массив categories
+        return technologies.map(tech => ({
+          ...tech,
+          categories: Array.isArray(tech.categories) ? tech.categories : []
+        }));
+      })
+    );
+  }
+
+  getTechnology(id: string): Observable<Technology> {
+    return this.http.get<Technology>(`${this.apiUrl}/technologies/${id}/`).pipe(
+      map(tech => ({
+        ...tech,
+        categories: Array.isArray(tech.categories) ? tech.categories : []
+      }))
     );
   }
 

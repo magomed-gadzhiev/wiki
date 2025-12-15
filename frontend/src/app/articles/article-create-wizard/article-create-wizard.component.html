@@ -12,8 +12,8 @@
           <div class="step-number">{{ step }}</div>
           <div class="step-label">
             <span *ngIf="step === 1">Технология</span>
-            <span *ngIf="step === 2">Элемент</span>
-            <span *ngIf="step === 3">Модель</span>
+            <span *ngIf="step === 2">Категория</span>
+            <span *ngIf="step === 3">Элемент</span>
             <span *ngIf="step === 4">Опции</span>
             <span *ngIf="step === 5">Описание</span>
             <span *ngIf="step === 6">Теги</span>
@@ -47,37 +47,65 @@
           </div>
         </div>
         
-        <!-- Шаг 2: Выбор элемента -->
+        <!-- Шаг 2: Выбор категории -->
         <div *ngIf="currentStep === 2" class="wizard-step">
-          <h2>Шаг 2: Выбор элемента</h2>
+          <h2>Шаг 2: Выбор категории</h2>
           <div class="form-group">
-            <label for="element_id">Элемент *</label>
+            <label for="category_id">Категория *</label>
             <select 
-              id="element_id" 
-              formControlName="element_id"
-              [class.error]="articleForm.get('element_id')?.invalid && articleForm.get('element_id')?.touched"
-              [disabled]="!selectedTechnology || availableElements.length === 0"
+              id="category_id" 
+              formControlName="category_id"
+              [class.error]="articleForm.get('category_id')?.invalid && articleForm.get('category_id')?.touched"
+              [disabled]="!selectedTechnology || availableCategories.length === 0"
             >
-              <option [ngValue]="null">-- Выберите элемент --</option>
-              <option *ngFor="let element of availableElements" [ngValue]="element.id">
-                {{ element.name }}
+              <option [ngValue]="null">-- Выберите категорию --</option>
+              <option *ngFor="let category of availableCategories" [ngValue]="category.id">
+                {{ category.name }}
               </option>
             </select>
             <div *ngIf="!selectedTechnology" class="info-message">
               Сначала выберите технологию на предыдущем шаге
             </div>
-            <div *ngIf="selectedTechnology && availableElements.length === 0" class="info-message">
-              У выбранной технологии нет элементов
+            <div *ngIf="selectedTechnology && availableCategories.length === 0" class="info-message">
+              У выбранной технологии нет категорий
             </div>
-            <div *ngIf="articleForm.get('element_id')?.invalid && articleForm.get('element_id')?.touched" class="error-message">
+            <div *ngIf="articleForm.get('category_id')?.invalid && articleForm.get('category_id')?.touched" class="error-message">
+              Категория обязательна
+            </div>
+          </div>
+        </div>
+        
+        <!-- Шаг 3: Выбор модели -->
+        <div *ngIf="currentStep === 3" class="wizard-step">
+          <h2>Шаг 3: Выбор элемента</h2>
+          <div class="form-group">
+            <label for="model_id">Элемент *</label>
+            <select 
+              id="model_id" 
+              formControlName="model_id"
+              [class.error]="articleForm.get('model_id')?.invalid && articleForm.get('model_id')?.touched"
+              [disabled]="!selectedCategory || availableModels.length === 0"
+            >
+              <option [ngValue]="null">-- Выберите элемент --</option>
+              <option *ngFor="let model of availableModels" [ngValue]="model.id">
+                {{ model.name }}
+              </option>
+            </select>
+            <div *ngIf="!selectedCategory" class="info-message">
+              Сначала выберите категорию на предыдущем шаге
+            </div>
+            <div *ngIf="selectedCategory && availableModels.length === 0" class="info-message">
+              У выбранной категории нет элементов
+            </div>
+            <div *ngIf="articleForm.get('model_id')?.invalid && articleForm.get('model_id')?.touched" class="error-message">
               Элемент обязателен
             </div>
           </div>
         </div>
         
-        <!-- Шаг 3: Название модели -->
-        <div *ngIf="currentStep === 3" class="wizard-step">
-          <h2>Шаг 3: Название модели</h2>
+        <!-- Шаг 4: Название статьи -->
+        <div *ngIf="currentStep === 4" class="wizard-step">
+          <h2>Шаг 4: Название статьи</h2>
           <div class="form-group">
             <label for="model_name">Название модели *</label>
             <input 

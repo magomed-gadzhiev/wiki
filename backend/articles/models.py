@@ -1,9 +1,12 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.utils.text import slugify
 
 User = get_user_model()
 import uuid
+import re
+import json
 
 
 class Technology(models.Model):
@@ -25,20 +28,40 @@ class Technology(models.Model):
         return self.name
 
 
-class Element(models.Model):
-    """Модель элемента"""
+class Category(models.Model):
+    """Модель категории"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255, verbose_name='Название')
-    technology = models.ForeignKey(Technology, on_delete=models.SET_NULL, null=True, blank=True, related_name='elements', verbose_name='Технология')
+    technology = models.ForeignKey(Technology, on_delete=models.SET_NULL, null=True, blank=True, related_name='categories', verbose_name='Технология')
+    sort_order = models.IntegerField(default=0, verbose_name='Порядок сортировки')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
+    
+    class Meta:
+        verbose_name = 'Категория'
+        verbose_name_plural = 'Категории'
+        ordering = ['technology', 'sort_order', 'name']
+        indexes = [
+            models.Index(fields=['technology', 'sort_order', 'name']),
+        ]
+    
+    def __str__(self):
+        return self.name
+
+
+class Model(models.Model):
+    """Модель модели"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, verbose_name='Название')
+    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='models', verbose_name='Категория')
     sort_order = models.IntegerField(default=0, verbose_name='Порядок сортировки')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
     
     class Meta:
         verbose_name = 'Элемент'
         verbose_name_plural = 'Элементы'
-        ordering = ['technology', 'sort_order', 'name']
+        ordering = ['category', 'sort_order', 'name']
         indexes = [
-            models.Index(fields=['technology', 'sort_order', 'name']),
+            models.Index(fields=['category', 'sort_order', 'name']),
         ]
     
     def __str__(self):
@@ -91,7 +114,7 @@ class Article(models.Model):
     model_name = models.CharField(max_length=255, verbose_name='Модель')
     content = models.TextField(blank=True, default='', verbose_name='Содержимое (HTML)')
     summary = models.TextField(blank=True, verbose_name='Краткое описание')
-    element = models.ForeignKey('Element', on_delete=models.SET_NULL, null=True, blank=True, related_name='articles', verbose_name='Элемент')
+    model = models.ForeignKey('Model', on_delete=models.SET_NULL, null=True, blank=True, related_name='articles', verbose_name='Модель')
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='articles', verbose_name='Автор')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлено')
@@ -108,6 +131,9 @@ class Article(models.Model):
     # Теги
     tags = models.ManyToManyField('Tag', related_name='articles', blank=True, verbose_name='Теги')
     
+    # Навигация (содержание статьи)
+    table_of_contents = models.JSONField(default=list, blank=True, verbose_name='Содержание')
+    
     class Meta:
         verbose_name = 'Статья'
         verbose_name_plural = 'Статьи'
@@ -118,6 +144,94 @@ class Article(models.Model):
 
     def __str__(self):
         return self.model_name
+    
+    def generate_table_of_contents(self):
+        """
+        Анализирует HTML контент статьи и генерирует навигацию (содержание)
+        на основе заголовков h1-h6
+        После вызова add_ids_to_headings все заголовки должны иметь ID
+        """
+        if not self.content:
+            self.table_of_contents = []
+            return
+        
+        # Используем регулярное выражение для поиска заголовков
+        # Паттерн ищет теги h1-h6 с обязательным атрибутом id (после add_ids_to_headings)
+        heading_pattern = re.compile(r'<h([1-6])[^>]*id=["\']([^"\']+)["\'][^>]*>(.*?)</h[1-6]>', re.IGNORECASE | re.DOTALL)
+        
+        toc_items = []
+        matches = heading_pattern.finditer(self.content)
+        
+        for match in matches:
+            level = int(match.group(1))
+            heading_id = match.group(2)
+            text_content = match.group(3)
+            
+            # Очищаем HTML теги из текста заголовка
+            text = re.sub(r'<[^>]+>', '', text_content).strip()
+            
+            if not text:
+                continue
+            
+            toc_items.append({
+                'id': heading_id,
+                'text': text,
+                'level': level
+            })
+        
+        self.table_of_contents = toc_items
+    
+    def add_ids_to_headings(self):
+        """
+        Добавляет ID к заголовкам в HTML контенте, если их нет
+        """
+        if not self.content:
+            return
+        
+        heading_pattern = re.compile(r'<h([1-6])([^>]*)>(.*?)</h[1-6]>', re.IGNORECASE | re.DOTALL)
+        index = 0
+        
+        def replace_heading(match):
+            nonlocal index
+            level = match.group(1)
+            attrs = match.group(2)
+            content = match.group(3)
+            
+            # Проверяем, есть ли уже ID
+            if 'id=' in attrs:
+                return match.group(0)
+            
+            # Очищаем HTML теги из текста для генерации slug
+            text = re.sub(r'<[^>]+>', '', content).strip()
+            if not text:
+                return match.group(0)
+            
+            # Генерируем ID
+            slug = slugify(text)
+            if not slug:
+                slug = f'heading-{index}'
+            heading_id = f'heading-{index}-{slug[:50]}'
+            index += 1
+            
+            # Добавляем ID к атрибутам
+            if attrs.strip():
+                new_attrs = f'{attrs} id="{heading_id}"'
+            else:
+                new_attrs = f' id="{heading_id}"'
+            
+            return f'<h{level}{new_attrs}>{content}</h{level}>'
+        
+        self.content = heading_pattern.sub(replace_heading, self.content)
+    
+    def save(self, *args, **kwargs):
+        # Добавляем ID к заголовкам, если их нет
+        if self.content:
+            self.add_ids_to_headings()
+        
+        # Генерируем навигацию на основе заголовков
+        self.generate_table_of_contents()
+        
+        super().save(*args, **kwargs)
 
 
 class ArticleVersion(models.Model):

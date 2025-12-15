@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
-from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Element, Technology, Tag, ArticleOption, ArticleOptionValue, Group, ArticleTemplate, Comment
+from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Model, Technology, Tag, ArticleOption, ArticleOptionValue, Group, ArticleTemplate, Comment
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -11,42 +11,85 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'first_name', 'last_name', 'email']
 
 
-class ElementSimpleSerializer(serializers.ModelSerializer):
-    """Упрощенный сериализатор элемента без технологии (для использования в TechnologySerializer)"""
+class CategorySimpleSerializer(serializers.ModelSerializer):
+    """Упрощенный сериализатор категории без технологии (для использования в TechnologySerializer)"""
     class Meta:
-        model = Element
+        model = Category
         fields = ['id', 'name', 'sort_order', 'created_at']
         read_only_fields = ['id', 'created_at']
 
 
 class TechnologySerializer(serializers.ModelSerializer):
-    elements = serializers.SerializerMethodField()
+    categories = serializers.SerializerMethodField()
     
     class Meta:
         model = Technology
-        fields = ['id', 'name', 'sort_order', 'created_at', 'elements']
+        fields = ['id', 'name', 'sort_order', 'created_at', 'categories']
         read_only_fields = ['id', 'created_at']
     
-    def get_elements(self, obj):
-        """Возвращает список всех элементов технологии"""
-        elements = obj.elements.all().order_by('sort_order', 'name')
-        return ElementSimpleSerializer(elements, many=True).data
+    def get_categories(self, obj):
+        """Возвращает список всех категорий технологии"""
+        categories = obj.categories.all().order_by('sort_order', 'name')
+        return CategorySimpleSerializer(categories, many=True).data
 
 
 class TechnologySimpleSerializer(serializers.ModelSerializer):
-    """Упрощенный сериализатор технологии без элементов (для использования в ElementSerializer)"""
+    """Упрощенный сериализатор технологии без категорий (для использования в CategorySerializer)"""
     class Meta:
         model = Technology
         fields = ['id', 'name', 'sort_order', 'created_at']
         read_only_fields = ['id', 'created_at']
 
 
-class ElementSerializer(serializers.ModelSerializer):
+class ModelSimpleSerializerForCategory(serializers.ModelSerializer):
+    """Упрощенный сериализатор модели для использования в CategorySerializer"""
+    class Meta:
+        model = Model
+        fields = ['id', 'name', 'sort_order', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    technology = TechnologySimpleSerializer(read_only=True)
+    models = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Category
+        fields = ['id', 'name', 'technology', 'sort_order', 'created_at', 'models']
+        read_only_fields = ['id', 'created_at']
+    
+    def get_models(self, obj):
+        """Возвращает список всех моделей категории"""
+        models = obj.models.all().order_by('sort_order', 'name')
+        return ModelSimpleSerializerForCategory(models, many=True).data
+
+
+class CategorySimpleSerializerForModel(serializers.ModelSerializer):
+    """Упрощенный сериализатор категории для использования в ModelSerializer"""
     technology = TechnologySimpleSerializer(read_only=True)
     
     class Meta:
-        model = Element
+        model = Category
         fields = ['id', 'name', 'technology', 'sort_order', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class ModelSerializer(serializers.ModelSerializer):
+    category = CategorySimpleSerializerForModel(read_only=True)
+    
+    class Meta:
+        model = Model
+        fields = ['id', 'name', 'category', 'sort_order', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class ModelSimpleSerializer(serializers.ModelSerializer):
+    """Упрощенный сериализатор модели для использования в ArticleSerializer"""
+    category = CategorySimpleSerializerForModel(read_only=True)
+    
+    class Meta:
+        model = Model
+        fields = ['id', 'name', 'category', 'sort_order', 'created_at']
         read_only_fields = ['id', 'created_at']
 
 
@@ -161,7 +204,7 @@ class ArticleVersionSerializer(serializers.ModelSerializer):
 
 class ArticleSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
-    element = ElementSerializer(read_only=True)
+    model = ModelSimpleSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     can_view = UserSerializer(many=True, read_only=True)
     can_edit = UserSerializer(many=True, read_only=True)
@@ -172,10 +215,10 @@ class ArticleSerializer(serializers.ModelSerializer):
     versions_count = serializers.IntegerField(source='versions.count', read_only=True)
     latest_version = serializers.SerializerMethodField()
     
-    # Для записи элемента
-    element_id = serializers.PrimaryKeyRelatedField(
-        queryset=Element.objects.all(),
-        source='element',
+    # Для записи модели
+    model_id = serializers.PrimaryKeyRelatedField(
+        queryset=Model.objects.all(),
+        source='model',
         write_only=True,
         required=False,
         allow_null=True
@@ -225,15 +268,15 @@ class ArticleSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'model_name', 'content', 'summary', 'author', 
             'created_at', 'updated_at', 'is_published', 'view_count',
-            'element', 'element_id',
+            'model', 'model_id',
             'tags', 'tag_ids',
             'can_view', 'can_edit', 'can_delete',
             'can_view_ids', 'can_edit_ids', 'can_delete_ids',
             'images', 'attachments', 'option_values', 'option_values_data',
             'versions_count', 'latest_version',
-            'is_deleted', 'deleted_at'
+            'is_deleted', 'deleted_at', 'table_of_contents'
         ]
-        read_only_fields = ['id', 'author', 'created_at', 'updated_at', 'view_count', 'is_deleted', 'deleted_at']
+        read_only_fields = ['id', 'author', 'created_at', 'updated_at', 'view_count', 'is_deleted', 'deleted_at', 'table_of_contents']
         extra_kwargs = {
             'content': {'required': False, 'allow_blank': True}
         }
@@ -290,13 +333,21 @@ class ArticleSerializer(serializers.ModelSerializer):
 class ArticleListSerializer(serializers.ModelSerializer):
     """Упрощенный сериализатор для списка статей"""
     author = UserSerializer(read_only=True)
-    element = ElementSerializer(read_only=True)
+    model = ModelSimpleSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
+    option_values = ArticleOptionValueSerializer(many=True, read_only=True)
+    latest_version = serializers.SerializerMethodField()
     
     class Meta:
         model = Article
-        fields = ['id', 'model_name', 'summary', 'author', 'element', 'tags', 'created_at', 
-                  'updated_at', 'is_published', 'view_count']
+        fields = ['id', 'model_name', 'summary', 'author', 'model', 'tags', 'created_at', 
+                  'updated_at', 'is_published', 'view_count', 'option_values', 'latest_version']
+    
+    def get_latest_version(self, obj):
+        latest = obj.versions.first()
+        if latest:
+            return ArticleVersionSerializer(latest).data
+        return None
 
 
 class GroupSerializer(serializers.ModelSerializer):

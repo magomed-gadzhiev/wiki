@@ -5,14 +5,19 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } 
 import { Observable, forkJoin } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ArticleService } from '../../core/services/article.service';
-import { Article, Element, Tag, ArticleOption, ArticleOptionValue, ArticleAttachment } from '../../core/models/article.model';
+import { Article, Category, Model, Tag, ArticleOption, ArticleOptionValue, ArticleAttachment } from '../../core/models/article.model';
 import { AuthService } from '../../core/services/auth.service';
 import * as grapesjs from 'grapesjs';
+import { ChartConfigDialogComponent } from '../shared/chart-config-dialog/chart-config-dialog.component';
+import { ChartConfig } from '../shared/chart-viewer/chart-viewer.component';
+import { CKEditorModule } from '@ckeditor/ckeditor5-angular';
+import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
+import { CkeditorUploadAdapter } from './ckeditor-upload-adapter';
 
 @Component({
   selector: 'app-article-editor',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterModule, ChartConfigDialogComponent, CKEditorModule],
   templateUrl: './article-editor.component.html',
   styleUrls: ['./article-editor.component.scss']
 })
@@ -20,15 +25,23 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   @ViewChild('fileInput') fileInput: any;
   @ViewChild('attachmentInput') attachmentInput: any;
   @ViewChild('gjsEditor', { static: false }) gjsEditor!: ElementRef;
+  @ViewChild('chartConfigDialog') chartConfigDialog!: ChartConfigDialogComponent;
+  
+  // Тип редактора: 'grapesjs' или 'ckeditor'
+  editorType: 'grapesjs' | 'ckeditor' = 'grapesjs';
+  public Editor = ClassicEditor;
+  ckeditorInstance: any = null;
   
   articleForm: FormGroup;
   isEditMode = false;
   articleId: string | null = null;
   saving = false;
   error: string | null = null;
-  elements: Element[] = [];
-  availableElementsForCreation: Element[] = [];
-  elementSelectionError: string | null = null;
+  categories: Category[] = [];
+  models: Model[] = [];
+  availableModelsForCreation: Model[] = [];
+  modelSelectionError: string | null = null;
+  selectedCategoryId: string | null = null;
   tags: Tag[] = [];
   selectedTags: Tag[] = [];
   tagSuggestions: Tag[] = [];
@@ -57,24 +70,24 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     this.articleForm = this.fb.group({
       model_name: ['', Validators.required],
       summary: [''],
-      element_id: [null],
+      model_id: [null],
       tag_ids: [[]],
       content: [''],
       change_description: [''],
       option_values_data: [[]]
     });
 
-    // Подписываемся на изменения категории для валидации прав
-    this.articleForm.get('element_id')?.valueChanges.subscribe(elementId => {
-      this.validateElementSelection(elementId);
+    // Подписываемся на изменения модели для валидации прав
+    this.articleForm.get('model_id')?.valueChanges.subscribe(modelId => {
+      this.validateModelSelection(modelId);
     });
   }
 
   ngOnInit(): void {
     // Проверяем, находимся ли мы на странице создания статьи из категории
     const url = this.router.url;
-    const elementMatch = url.match(/\/elements\/([^\/]+)\/articles\/new/);
-    const elementId = elementMatch ? elementMatch[1] : null;
+    const categoryMatch = url.match(/\/categories\/([^\/]+)\/articles\/new/);
+    const categoryId = categoryMatch ? categoryMatch[1] : null;
     
     // Проверяем, редактируем ли мы существующую статью
     const articleIdMatch = url.match(/\/articles\/([^\/]+)\/edit/);
@@ -85,25 +98,23 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       this.articleId = id;
     }
     
-    // Загружаем элементы сначала, затем статью (если редактирование)
-    this.loadElements().subscribe({
-      next: (elements) => {
-        // Убеждаемся, что elements - это массив
-        this.elements = Array.isArray(elements) ? elements : [];
+    // Загружаем категории и модели сначала, затем статью (если редактирование)
+    forkJoin({
+      categories: this.articleService.getCategories(),
+      models: this.articleService.getModels()
+    }).subscribe({
+      next: ({ categories, models }) => {
+        this.categories = Array.isArray(categories) ? categories : [];
+        this.models = Array.isArray(models) ? models : [];
+        this.availableModelsForCreation = this.models;
         
-        // Фильтруем элементы для создания статей - только с полными правами (full)
-        // Показываем все элементы (права проверяются на уровне API)
-        this.availableElementsForCreation = this.elements;
-        
-        // Если это создание новой статьи и указан элемент в URL
-        if (!this.isEditMode && elementId) {
-          const element = this.availableElementsForCreation.find(e => e.id === elementId);
-          if (element) {
-            this.articleForm.patchValue({ element_id: elementId });
-          }
+        // Если это создание новой статьи и указана категория в URL
+        if (!this.isEditMode && categoryId) {
+          this.selectedCategoryId = categoryId;
+          this.filterModelsByCategory(categoryId);
         }
         
-        // После загрузки элементов загружаем теги, опции и статью, если это режим редактирования
+        // После загрузки категорий и моделей загружаем теги, опции и статью, если это режим редактирования
         this.loadTags();
         this.loadOptions();
         if (id) {
@@ -111,9 +122,10 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         }
       },
       error: () => {
-        this.elements = []; // Устанавливаем пустой массив при ошибке
-        this.availableElementsForCreation = [];
-        // Все равно загружаем статью, даже если элементы не загрузились
+        this.categories = [];
+        this.models = [];
+        this.availableModelsForCreation = [];
+        // Все равно загружаем статью, даже если категории/модели не загрузились
         this.loadTags();
         if (id) {
           this.loadArticle(id);
@@ -122,20 +134,41 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     });
   }
 
-  validateElementSelection(elementId: string | null): void {
-    if (!elementId) {
-      this.elementSelectionError = null;
+  filterModelsByCategory(categoryId: string | null): void {
+    if (!categoryId) {
+      this.availableModelsForCreation = this.models;
+      return;
+    }
+    this.availableModelsForCreation = this.models.filter(m => m.category?.id === categoryId);
+  }
+
+  onCategoryChange(categoryId: string | null): void {
+    this.selectedCategoryId = categoryId;
+    this.filterModelsByCategory(categoryId);
+    // Сбрасываем выбранный элемент, если он не принадлежит новой категории
+    const currentModelId = this.articleForm.get('model_id')?.value;
+    if (currentModelId) {
+      const currentModel = this.availableModelsForCreation.find(m => m.id === currentModelId);
+      if (!currentModel) {
+        this.articleForm.patchValue({ model_id: null });
+      }
+    }
+  }
+
+  validateModelSelection(modelId: string | null): void {
+    if (!modelId) {
+      this.modelSelectionError = null;
       return;
     }
 
     // В режиме редактирования не проверяем права (статья уже существует)
     if (this.isEditMode) {
-      this.elementSelectionError = null;
+      this.modelSelectionError = null;
       return;
     }
 
     // Права проверяются на уровне API, здесь просто очищаем ошибку
-    this.elementSelectionError = null;
+    this.modelSelectionError = null;
   }
 
   loadTags(): void {
@@ -354,25 +387,6 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     this.articleForm.patchValue({ tag_ids: tagIds });
   }
 
-  loadElements(): Observable<Element[]> {
-    return this.articleService.getElements().pipe(
-      map(elements => {
-        // Убеждаемся, что возвращается массив
-        if (Array.isArray(elements)) {
-          return elements;
-        }
-        // Если ответ в формате { results: [...] } или другом
-        if (elements && typeof elements === 'object' && 'results' in elements) {
-          return (elements as any).results;
-        }
-        // Если это объект, преобразуем в массив
-        if (elements && typeof elements === 'object') {
-          return Object.values(elements);
-        }
-        return [];
-      })
-    );
-  }
 
   compareElement(el1: string | null, el2: string | null): boolean {
     // Приводим к строкам для сравнения, чтобы избежать проблем с типами
@@ -384,17 +398,300 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     return str1 === str2;
   }
 
-  trackByElementId(index: number, element: Element): string {
-    return element.id;
+  trackByCategoryId(index: number, category: Category): string {
+    return category.id;
+  }
+
+  trackByModelId(index: number, model: Model): string {
+    return model.id;
   }
 
   ngAfterViewInit(): void {
-    this.initStudioEditor();
+    if (this.editorType === 'grapesjs') {
+      this.initStudioEditor();
+    }
+    // CKEditor инициализируется автоматически через компонент
   }
 
   ngOnDestroy(): void {
     if (this.editor && typeof this.editor.destroy === 'function') {
       this.editor.destroy();
+    }
+    if (this.ckeditorInstance && typeof this.ckeditorInstance.destroy === 'function') {
+      this.ckeditorInstance.destroy();
+    }
+  }
+
+  // Переключение между редакторами
+  switchEditor(type: 'grapesjs' | 'ckeditor'): void {
+    if (this.editorType === type) {
+      return;
+    }
+
+    // Сохраняем контент из текущего редактора
+    const currentContent = this.getEditorContent();
+
+    // Уничтожаем текущий редактор
+    if (this.editorType === 'grapesjs' && this.editor) {
+      if (typeof this.editor.destroy === 'function') {
+        this.editor.destroy();
+      }
+      this.editor = null;
+    } else if (this.editorType === 'ckeditor' && this.ckeditorInstance) {
+      if (typeof this.ckeditorInstance.destroy === 'function') {
+        this.ckeditorInstance.destroy();
+      }
+      this.ckeditorInstance = null;
+    }
+
+    // Переключаем тип редактора
+    this.editorType = type;
+
+    // Инициализируем новый редактор
+    setTimeout(() => {
+      if (type === 'grapesjs') {
+        this.initStudioEditor();
+        if (currentContent) {
+          setTimeout(() => this.loadContentToEditor(currentContent), 500);
+        }
+      } else {
+        // CKEditor инициализируется автоматически, загружаем контент
+        if (currentContent) {
+          setTimeout(() => this.loadContentToCkeditor(currentContent), 500);
+        }
+      }
+    }, 100);
+  }
+
+  // Обработка HTML: оборачивание текста в td/th в span, если нет вложенных тегов
+  wrapTextInTableCellSpans(html: string): string {
+    if (!html || typeof html !== 'string') {
+      return html;
+    }
+
+    try {
+      // Создаем временный DOM для парсинга HTML
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      // Находим все td и th элементы
+      const cells = doc.querySelectorAll('td, th');
+      
+      cells.forEach((cell) => {
+        // Получаем все дочерние элементы (не текстовые узлы)
+        const childElements = Array.from(cell.children);
+        
+        // Проверяем, есть ли в ячейке теги кроме br
+        const hasTagsOtherThanBr = childElements.some(el => {
+          const tagName = el.tagName.toLowerCase();
+          return tagName !== 'br';
+        });
+        
+        // Проверяем, есть ли уже span в ячейке
+        const hasSpan = childElements.some(el => el.tagName.toLowerCase() === 'span');
+        
+        // Если нет тегов (кроме br) или только br
+        if (!hasTagsOtherThanBr) {
+          const textContent = cell.textContent?.trim();
+          const content = cell.innerHTML.trim();
+          
+          // Проверяем, не обернут ли уже контент в span
+          const trimmedContent = content.replace(/^\s+|\s+$/g, '');
+          const isAlreadyWrapped = trimmedContent.startsWith('<span') && trimmedContent.endsWith('</span>');
+          
+          // Если ячейка пустая (нет текста и нет тегов) или содержит только пробелы/br
+          if (!hasSpan && !isAlreadyWrapped) {
+            if (!textContent) {
+              // Пустая ячейка или только пробелы/br - добавляем span с неразрывным пробелом для редактирования
+              cell.innerHTML = '<span>&nbsp;</span>';
+            } else {
+              // Есть текстовое содержимое - оборачиваем в span
+              if (content) {
+                cell.innerHTML = `<span>${content}</span>`;
+              } else {
+                cell.innerHTML = `<span>${textContent}</span>`;
+              }
+            }
+          }
+        }
+      });
+      
+      // Возвращаем обработанный HTML
+      return doc.body.innerHTML;
+    } catch (error) {
+      console.error('Error wrapping text in table cells:', error);
+      return html;
+    }
+  }
+
+  // Получение контента из текущего редактора
+  getEditorContent(): string {
+    if (this.editorType === 'grapesjs' && this.editor) {
+      try {
+        const html = this.editor.getHtml ? this.editor.getHtml() : '';
+        const css = this.editor.getCss ? this.editor.getCss() : '';
+        const processedHtml = this.wrapTextInTableCellSpans(html);
+        return `<style>${css}</style>${processedHtml}`;
+      } catch (error) {
+        console.error('Error getting content from GrapesJS:', error);
+        return '';
+      }
+    } else if (this.editorType === 'ckeditor' && this.ckeditorInstance) {
+      try {
+        return this.ckeditorInstance.getData();
+      } catch (error) {
+        console.error('Error getting content from CKEditor:', error);
+        return '';
+      }
+    }
+    return '';
+  }
+
+  // Загрузка контента в CKEditor
+  loadContentToCkeditor(content: string): void {
+    if (!this.ckeditorInstance) {
+      setTimeout(() => this.loadContentToCkeditor(content), 100);
+      return;
+    }
+
+    try {
+      // Извлекаем HTML из контента (убираем стили для CKEditor)
+      const htmlMatch = content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').trim();
+      this.ckeditorInstance.setData(htmlMatch || '');
+    } catch (error) {
+      console.error('Error loading content to CKEditor:', error);
+    }
+  }
+
+  // Обработчик готовности CKEditor
+  onCkeditorReady(editor: any): void {
+    this.ckeditorInstance = editor;
+    
+    // Настраиваем upload adapter для изображений
+    if (this.articleId) {
+      editor.plugins.get('FileRepository').createUploadAdapter = (loader: any) => {
+        return new CkeditorUploadAdapter(loader, this.articleService, this.articleId!);
+      };
+    }
+    
+    // Загружаем контент, если он есть
+    const content = this.articleForm.get('content')?.value;
+    if (content) {
+      setTimeout(() => this.loadContentToCkeditor(content), 100);
+    }
+  }
+
+  // Обработчик изменения контента в CKEditor
+  onCkeditorChange(): void {
+    if (this.ckeditorInstance) {
+      const data = this.ckeditorInstance.getData();
+      // Обновляем форму без эмита события, чтобы избежать циклов
+      this.articleForm.patchValue({ content: data }, { emitEvent: false });
+    }
+  }
+
+  // Вставка графика в CKEditor (вызывается из кнопки или другого места)
+  insertChartToCkeditor(): void {
+    if (!this.ckeditorInstance) {
+      return;
+    }
+
+    const chartHtml = '<div class="wiki-chart-container" data-chart-config="{}" style="width: 100%; max-width: 100%; height: 500px; max-height: 500px; min-height: 400px; border: 2px dashed #007bff; padding: 20px; text-align: center; background-color: #f8f9fa; margin: 0 auto;"><p style="color: #6c757d; margin: 0;">График (нажмите для настройки)</p></div>';
+    
+    // Получаем текущий контент
+    const currentData = this.ckeditorInstance.getData();
+    
+    // Добавляем график в конец контента
+    const newData = currentData + chartHtml;
+    
+    // Устанавливаем новый контент
+    this.ckeditorInstance.setData(newData);
+
+    // Открываем диалог настройки
+    setTimeout(() => {
+      this.openChartConfigDialogForCkeditor();
+    }, 100);
+  }
+
+  // Открытие диалога настройки графика для CKEditor
+  openChartConfigDialogForCkeditor(): void {
+    if (!this.chartConfigDialog) {
+      return;
+    }
+
+    // Находим последний вставленный график
+    const editorData = this.ckeditorInstance.getData();
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = editorData;
+    const chartContainers = tempDiv.querySelectorAll('.wiki-chart-container');
+    
+    if (chartContainers.length === 0) {
+      return;
+    }
+
+    const lastChart = chartContainers[chartContainers.length - 1];
+    const configAttr = lastChart.getAttribute('data-chart-config');
+    let existingConfig: ChartConfig | undefined;
+    
+    if (configAttr && configAttr !== '{}') {
+      try {
+        existingConfig = JSON.parse(configAttr);
+      } catch (e) {
+        console.error('Error parsing chart config:', e);
+      }
+    }
+
+    // Настраиваем обработчики диалога
+    this.chartConfigDialog.onSave = (config: ChartConfig) => {
+      this.saveChartConfigForCkeditor(config);
+    };
+
+    this.chartConfigDialog.onCancel = () => {
+      // Ничего не делаем при отмене
+    };
+
+    // Открываем диалог
+    this.chartConfigDialog.open(existingConfig);
+  }
+
+  // Сохранение конфигурации графика для CKEditor
+  saveChartConfigForCkeditor(config: ChartConfig): void {
+    if (!this.ckeditorInstance) {
+      return;
+    }
+
+    try {
+      const configJson = JSON.stringify(config);
+      const editorData = this.ckeditorInstance.getData();
+      
+      // Создаем временный контейнер для парсинга HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = editorData;
+      
+      // Находим все графики
+      const chartContainers = tempDiv.querySelectorAll('.wiki-chart-container');
+      
+      if (chartContainers.length === 0) {
+        return;
+      }
+
+      // Обновляем последний график
+      const lastChart = chartContainers[chartContainers.length - 1] as HTMLElement;
+      lastChart.setAttribute('data-chart-config', configJson);
+      
+      // Обновляем внутренний HTML для отображения
+      const title = config.title || 'График';
+      const seriesCount = config.series ? config.series.length : 0;
+      lastChart.innerHTML = `<div style="padding: 20px; text-align: center; background-color: #e7f3ff; border: 2px solid #007bff; border-radius: 4px;">
+        <p style="margin: 0; color: #007bff; font-weight: bold;">📊 ${title}</p>
+        <p style="margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;">${seriesCount} график(ов) настроено</p>
+      </div>`;
+      
+      // Устанавливаем обновленный контент
+      this.ckeditorInstance.setData(tempDiv.innerHTML);
+    } catch (error) {
+      console.error('Error saving chart config:', error);
+      this.error = 'Ошибка сохранения конфигурации графика';
     }
   }
 
@@ -443,6 +740,11 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         // Настройки для сохранения ID компонентов
         // GrapesJS должен сохранять существующие ID из HTML
         avoidInlineStyle: false,
+        // Настройка Selector Manager для применения стилей только к выбранному компоненту
+        // Это предотвращает изменение размера всех изображений при изменении одного
+        selectorManager: {
+          componentFirst: true
+        },
         plugins: [],
         pluginsOpts: {}
       });
@@ -595,6 +897,226 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
             .col-9:hover, .col-10:hover, .col-11:hover, .col-12:hover {
               background-color: rgba(255, 193, 7, 0.15);
               border-color: rgba(255, 193, 7, 0.6);
+            }
+            
+            /* Стили для блока графика в редакторе */
+            .wiki-chart-container {
+              padding-top: 20px;
+              padding-bottom: 20px;
+              background-color: rgba(138, 43, 226, 0.05);
+              border: 2px dashed rgba(138, 43, 226, 0.3);
+              position: relative;
+              min-height: 400px;
+              width: 100%;
+              max-width: 100%;
+            }
+            
+            .wiki-chart-container::before {
+              content: 'График по CSV';
+              position: absolute;
+              top: 5px;
+              left: 5px;
+              font-size: 11px;
+              color: rgba(138, 43, 226, 0.6);
+              font-weight: 600;
+              text-transform: uppercase;
+              pointer-events: none;
+              z-index: 1;
+            }
+            
+            .wiki-chart-container:hover {
+              background-color: rgba(138, 43, 226, 0.1);
+              border-color: rgba(138, 43, 226, 0.5);
+            }
+            
+            /* Стили для таблиц в редакторе */
+            table {
+              width: 100% !important;
+              max-width: 100% !important;
+              border-collapse: collapse;
+              margin: 20px 0;
+              table-layout: auto;
+            }
+            
+            table th,
+            table td {
+              min-width: 50px !important;
+              min-height: 30px !important;
+              padding: 8px;
+              border: 1px solid #ddd;
+              text-align: left;
+              vertical-align: top;
+            }
+            
+            table th {
+              background-color: #f5f5f5;
+              font-weight: bold;
+            }
+            
+            /* Стили для span внутри ячеек таблиц - визуальное выделение */
+            table td span,
+            table th span {
+              display: inline-block;
+              min-width: 20px;
+              min-height: 20px;
+              padding: 2px 4px;
+              background-color: rgba(0, 123, 255, 0.08);
+              border: 1px dashed rgba(0, 123, 255, 0.3);
+              border-radius: 2px;
+              position: relative;
+            }
+            
+            /* Плейсхолдер для пустых span */
+            table td span:empty::before,
+            table th span:empty::before {
+              content: 'span';
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              font-size: 10px;
+              color: rgba(0, 123, 255, 0.5);
+              font-weight: 600;
+              text-transform: uppercase;
+              pointer-events: none;
+              white-space: nowrap;
+            }
+            
+            /* Hover эффект для span в ячейках */
+            table td span:hover,
+            table th span:hover {
+              background-color: rgba(0, 123, 255, 0.15);
+              border-color: rgba(0, 123, 255, 0.5);
+            }
+            
+            /* Стили для tooltip в ячейках таблиц */
+            .table-cell-tooltip {
+              position: relative;
+              min-height: 20px;
+            }
+            
+            /* Tooltip для ячеек с data-tooltip-text - отображается постоянно для пустых ячеек */
+            .table-cell-tooltip[data-tooltip-text]::before {
+              content: attr(data-tooltip-text);
+              position: absolute;
+              bottom: 100%;
+              left: 50%;
+              transform: translateX(-50%);
+              background-color: #333;
+              color: #fff;
+              padding: 5px 10px;
+              border-radius: 4px;
+              font-size: 12px;
+              z-index: 1000;
+              opacity: 0;
+              pointer-events: none;
+              transition: opacity 0.3s;
+              margin-bottom: 5px;
+              font-style: normal;
+              max-width: 300px;
+              white-space: normal;
+              word-wrap: break-word;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+            
+            /* Tooltip при hover для пустых ячеек (через класс tooltip-empty) */
+            .table-cell-tooltip[data-tooltip-text].tooltip-empty:hover::before {
+              opacity: 1;
+            }
+            
+            /* Tooltip при hover для пустых ячеек (fallback для CSS) */
+            .table-cell-tooltip[data-tooltip-text]:empty:hover::before {
+              opacity: 1;
+            }
+            
+            /* Tooltip при hover для ячеек с контентом (скрыт, так как не пустые) */
+            .table-cell-tooltip[data-tooltip-text]:not(.tooltip-empty):hover::before {
+              opacity: 0;
+            }
+            
+            .table-cell-tooltip[data-tooltip-text]::after {
+              content: '';
+              position: absolute;
+              bottom: 100%;
+              left: 50%;
+              transform: translateX(-50%) translateY(100%);
+              border: 5px solid transparent;
+              border-top-color: #333;
+              z-index: 1000;
+              opacity: 0;
+              pointer-events: none;
+              transition: opacity 0.3s;
+            }
+            
+            /* Стрелка tooltip при hover для пустых ячеек */
+            .table-cell-tooltip[data-tooltip-text].tooltip-empty:hover::after,
+            .table-cell-tooltip[data-tooltip-text]:empty:hover::after {
+              opacity: 1;
+            }
+            
+            /* Стрелка tooltip скрыта для ячеек с контентом */
+            .table-cell-tooltip[data-tooltip-text]:not(.tooltip-empty):hover::after {
+              opacity: 0;
+            }
+            
+            /* Стили для tooltip-placeholder (если он есть) */
+            .table-cell-tooltip .tooltip-placeholder {
+              display: inline-block;
+              width: 100%;
+              min-height: 20px;
+              color: #A6A6A6;
+              font-style: italic;
+            }
+            
+            .table-cell-tooltip .tooltip-placeholder::before {
+              content: attr(data-tooltip-text);
+              position: absolute;
+              bottom: 100%;
+              left: 50%;
+              transform: translateX(-50%);
+              background-color: #333;
+              color: #fff;
+              padding: 5px 10px;
+              border-radius: 4px;
+              font-size: 12px;
+              z-index: 1000;
+              opacity: 0;
+              pointer-events: none;
+              transition: opacity 0.3s;
+              margin-bottom: 5px;
+              font-style: normal;
+              max-width: 300px;
+              white-space: normal;
+              word-wrap: break-word;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+            
+            .table-cell-tooltip:hover .tooltip-placeholder::before {
+              opacity: 1;
+            }
+            
+            .table-cell-tooltip .tooltip-placeholder::after {
+              content: '';
+              position: absolute;
+              bottom: 100%;
+              left: 50%;
+              transform: translateX(-50%) translateY(100%);
+              border: 5px solid transparent;
+              border-top-color: #333;
+              z-index: 1000;
+              opacity: 0;
+              pointer-events: none;
+              transition: opacity 0.3s;
+            }
+            
+            .table-cell-tooltip:hover .tooltip-placeholder::after {
+              opacity: 1;
+            }
+            
+            /* Скрываем tooltip-placeholder tooltip, если ячейка содержит видимый текст */
+            .table-cell-tooltip:not(:has(.tooltip-placeholder:only-child)) .tooltip-placeholder::before,
+            .table-cell-tooltip:not(:has(.tooltip-placeholder:only-child)) .tooltip-placeholder::after {
+              display: none;
             }
           `;
           // Проверяем, не добавлены ли уже стили
@@ -755,7 +1277,8 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
             try {
               const html = this.editor.getHtml ? this.editor.getHtml() : '';
               const css = this.editor.getCss ? this.editor.getCss() : '';
-              const content = `<style>${css}</style>${html}`;
+              const processedHtml = this.wrapTextInTableCellSpans(html);
+              const content = `<style>${css}</style>${processedHtml}`;
               this.articleForm.patchValue({ content }, { emitEvent: false });
             } catch (error) {
               // Ошибка синхронизации контента
@@ -763,19 +1286,37 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           }
         };
 
+
         // Синхронизируем изменения редактора с формой
         if (this.editor && typeof this.editor.on === 'function') {
           // Обновление компонентов
-          this.editor.on('update', syncContent);
+          this.editor.on('update', () => {
+            syncContent();
+            setTimeout(() => this.updateTooltipClasses(), 100);
+          });
           
           // Обновление стилей через Style Manager
-          this.editor.on('style:custom', syncContent);
-          this.editor.on('component:styleUpdate', syncContent);
+          this.editor.on('style:custom', () => {
+            syncContent();
+            setTimeout(() => this.updateTooltipClasses(), 100);
+          });
+          this.editor.on('component:styleUpdate', () => {
+            syncContent();
+            setTimeout(() => this.updateTooltipClasses(), 100);
+          });
           this.editor.on('style:property:update', syncContent);
           
           // Обновление при изменении CSS
           this.editor.on('css:update', syncContent);
+          
+          // Обновление при изменении компонентов
+          this.editor.on('component:update', () => {
+            setTimeout(() => this.updateTooltipClasses(), 100);
+          });
         }
+        
+        // Первоначальное обновление классов tooltip
+        setTimeout(() => this.updateTooltipClasses(), 500);
 
         // Загружаем контент, если он уже есть в форме
         const currentContent = this.articleForm.get('content')?.value;
@@ -826,6 +1367,43 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       };
       return icons[iconName] || icons['container'];
     };
+
+    // Основные блоки (группа в начале списка)
+    blockManager.add('paragraph', {
+      label: 'Параграф',
+      category: 'Основные',
+      content: '<p>Текст параграфа</p>',
+      attributes: { class: 'gjs-block' },
+      media: getIcon('paragraph')
+    });
+
+    blockManager.add('image', {
+      label: 'Изображение',
+      category: 'Основные',
+      content: `<img src="${getPlaceholderImage(300, 200)}" class="img-fluid" alt="Изображение">`,
+      attributes: { class: 'gjs-block' },
+      media: getIcon('image')
+    });
+
+    const chartIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 3 3 21 21 21"/><line x1="7" y1="16" x2="11" y2="16"/><line x1="7" y1="12" x2="15" y2="12"/><line x1="7" y1="8" x2="19" y2="8"/></svg>';
+    
+    blockManager.add('chart', {
+      label: 'График по CSV',
+      category: 'Основные',
+      content: '<div class="wiki-chart-container" data-chart-config="{}" style="width: 100%; max-width: 100%; height: 500px; max-height: 500px; min-height: 400px; border: 2px dashed #007bff; padding: 20px; text-align: center; background-color: #f8f9fa; margin: 0 auto;"><p style="color: #6c757d; margin: 0;">График (нажмите для настройки)</p></div>',
+      attributes: { class: 'gjs-block' },
+      media: chartIcon,
+      activate: true,
+      select: true
+    });
+
+    blockManager.add('span', {
+      label: 'Span',
+      category: 'Основные',
+      content: '<span>Текст</span>',
+      attributes: { class: 'gjs-block' },
+      media: getIcon('paragraph')
+    });
 
     // Layout - Container
     blockManager.add('container', {
@@ -1143,14 +1721,6 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     });
 
     // Typography - Text Elements
-    blockManager.add('paragraph', {
-      label: 'Параграф',
-      category: 'Typography - Text Elements',
-      content: '<p>Текст параграфа</p>',
-      attributes: { class: 'gjs-block' },
-      media: getIcon('paragraph')
-    });
-
     blockManager.add('lead', {
       label: 'Lead (выделенный текст)',
       category: 'Typography - Text Elements',
@@ -1889,14 +2459,6 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     });
 
     // Images
-    blockManager.add('image', {
-      label: 'Изображение',
-      category: 'Images',
-      content: `<img src="${getPlaceholderImage(300, 200)}" class="img-fluid" alt="Изображение">`,
-      attributes: { class: 'gjs-block' },
-      media: getIcon('image')
-    });
-
     blockManager.add('image-rounded', {
       label: 'Изображение Rounded',
       category: 'Images',
@@ -1960,6 +2522,55 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       attributes: { class: 'gjs-block' },
       media: getIcon('image')
     });
+
+    // Настраиваем обработчик для блока графика
+    if (this.editor && typeof this.editor.on === 'function') {
+      this.editor.on('component:selected', (component: any) => {
+        const el = component.getEl();
+        if (el && el.classList && el.classList.contains('wiki-chart-container')) {
+          this.openChartConfigDialog(component);
+        }
+      });
+    }
+  }
+
+  // Обновление классов tooltip в ячейках таблиц
+  updateTooltipClasses(): void {
+    try {
+      const canvas = this.editor?.Canvas;
+      if (!canvas) return;
+      
+      const frameEl = canvas.getFrameEl();
+      if (!frameEl || !frameEl.contentDocument) return;
+      
+      const doc = frameEl.contentDocument;
+      const tooltipCells = doc.querySelectorAll('.table-cell-tooltip[data-tooltip-text]');
+      
+      tooltipCells.forEach((cell: Element) => {
+        const htmlCell = cell as HTMLElement;
+        // Получаем текстовое содержимое ячейки (без HTML тегов)
+        const textContent = htmlCell.textContent?.trim() || '';
+        
+        // Проверяем, пустая ли ячейка или содержит только пробелы/&nbsp;
+        const isEmpty = !textContent || textContent === '\u00A0' || textContent === '&nbsp;';
+        
+        // Проверяем, содержит ли ячейка только один span с &nbsp;
+        const hasOnlyEmptySpan = htmlCell.children.length === 1 && 
+          htmlCell.children[0].tagName.toLowerCase() === 'span' &&
+          (htmlCell.children[0].textContent?.trim() === '' || 
+           htmlCell.children[0].textContent?.trim() === '\u00A0' ||
+           htmlCell.children[0].innerHTML === '&nbsp;' ||
+           htmlCell.children[0].innerHTML.trim() === '');
+        
+        if (isEmpty || hasOnlyEmptySpan) {
+          htmlCell.classList.add('tooltip-empty');
+        } else {
+          htmlCell.classList.remove('tooltip-empty');
+        }
+      });
+    } catch (error) {
+      // Игнорируем ошибки при обновлении классов
+    }
   }
 
   loadContentToEditor(content: string): void {
@@ -1983,25 +2594,41 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       // GrapesJS должен автоматически сохранять существующие ID из HTML
       if (htmlMatch) {
         this.editor.setComponents(htmlMatch);
+        // Обновляем классы tooltip после загрузки контента
+        setTimeout(() => this.updateTooltipClasses(), 200);
       } else if (content) {
         // Если нет HTML без стилей, используем весь контент
         this.editor.setComponents(content);
+        // Обновляем классы tooltip после загрузки контента
+        setTimeout(() => this.updateTooltipClasses(), 300);
       }
       
-      // После загрузки компонентов проверяем и сохраняем ID
+      // После загрузки компонентов проверяем и сохраняем атрибуты
       setTimeout(() => {
         try {
-          // Получаем все компоненты и убеждаемся, что их ID сохранены
+          // Получаем все компоненты и восстанавливаем их атрибуты
           const components = this.editor.getComponents();
           components.each((component: any) => {
-            // Если у компонента нет ID, но он был в исходном HTML, восстанавливаем его
             const el = component.getEl();
-            if (el && !component.getId() && el.id) {
-              component.set('id', el.id);
+            if (el) {
+              // Восстанавливаем ID, если он был в исходном HTML
+              if (!component.getId() && el.id) {
+                component.set('id', el.id);
+              }
+              
+              // Восстанавливаем data-chart-config для графиков
+              if (el.classList && el.classList.contains('wiki-chart-container')) {
+                const configAttr = el.getAttribute('data-chart-config');
+                if (configAttr && configAttr !== '{}') {
+                  // Убеждаемся, что атрибут сохранен в компоненте
+                  component.addAttributes({ 'data-chart-config': configAttr });
+                }
+              }
             }
           });
         } catch (e) {
-          // Не удалось обработать ID компонентов
+          // Не удалось обработать атрибуты компонентов
+          console.error('Error restoring component attributes:', e);
         }
       }, 300);
       
@@ -2055,23 +2682,25 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     this.articleService.getArticle(id).subscribe({
       next: (article) => {
         
-        // Устанавливаем значения формы
-        const elementId = article.element?.id || null;
-        
         // В режиме редактирования добавляем элемент статьи в список доступных элементов,
         // даже если у пользователя нет полных прав (статья уже существует)
-        if (elementId && this.isEditMode) {
-          const articleElement = article.element;
-          if (articleElement) {
-            // Проверяем, есть ли уже этот элемент в списке
-            const existingElement = this.elements.find(e => e.id === elementId);
-            if (!existingElement) {
-              // Добавляем элемент статьи в список элементов
-              this.elements.push(articleElement);
-            }
-            // Обновляем список доступных элементов для редактирования
-            this.availableElementsForCreation = this.elements;
+        if (article.model && this.isEditMode) {
+          const articleModel = article.model;
+          // Проверяем, есть ли уже этот элемент в списке
+          const existingModel = this.models.find(m => m.id === articleModel.id);
+          if (!existingModel) {
+            // Добавляем элемент статьи в список элементов
+            this.models.push(articleModel);
           }
+          // Если у модели есть категория, добавляем её в список категорий
+          if (articleModel.category) {
+            const existingCategory = this.categories.find(c => c.id === articleModel.category?.id);
+            if (!existingCategory) {
+              this.categories.push(articleModel.category);
+            }
+          }
+          // Обновляем список доступных моделей для редактирования
+          this.availableModelsForCreation = this.models;
         }
         
         // Устанавливаем выбранные теги
@@ -2091,17 +2720,23 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         
         this.isPublished = article.is_published || false;
         
+        const modelId = article.model?.id || null;
+        const categoryId = article.model?.category?.id || null;
+        
         this.articleForm.patchValue({
           model_name: article.model_name || '',
           summary: article.summary || '',
           content: article.content || '',
           change_description: '',
-          element_id: elementId,
+          model_id: modelId,
           tag_ids: tagIds
         });
         
-        // Загружаем вложения
-        this.attachments = article.attachments || [];
+        // Устанавливаем выбранную категорию для фильтрации моделей
+        if (categoryId) {
+          this.selectedCategoryId = categoryId;
+          this.filterModelsByCategory(categoryId);
+        }
         
         // Загружаем вложения
         this.attachments = article.attachments || [];
@@ -2109,21 +2744,25 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         // Загружаем контент в редактор
         if (article.content) {
           setTimeout(() => {
-            this.loadContentToEditor(article.content);
+            if (this.editorType === 'grapesjs') {
+              this.loadContentToEditor(article.content);
+            } else {
+              this.loadContentToCkeditor(article.content);
+            }
           }, 300);
         }
         
         // Дополнительно устанавливаем значение через setValue для надежности
         // Используем setTimeout, чтобы дать время Angular обновить DOM
         setTimeout(() => {
-          const control = this.articleForm.get('element_id');
+          const control = this.articleForm.get('model_id');
           if (control) {
-            if (elementId && this.elements.length > 0) {
+            if (modelId && this.models.length > 0) {
               // Проверяем, что элемент существует в списке
-              const elementExists = this.elements.some(el => String(el.id) === String(elementId));
+              const modelExists = this.models.some(m => String(m.id) === String(modelId));
               
-              if (elementExists) {
-                control.setValue(elementId, { emitEvent: false });
+              if (modelExists) {
+                control.setValue(modelId, { emitEvent: false });
               } else {
                 control.setValue(null, { emitEvent: false });
               }
@@ -2142,16 +2781,10 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   onSubmit(): void {
     // Права проверяются на уровне API
 
-    // Получаем контент из редактора перед сохранением
-    if (this.editor) {
-      try {
-        const html = this.editor.getHtml ? this.editor.getHtml() : '';
-        const css = this.editor.getCss ? this.editor.getCss() : '';
-        const content = `<style>${css}</style>${html}`;
-        this.articleForm.patchValue({ content });
-      } catch (error) {
-        // Ошибка получения контента из редактора
-      }
+    // Получаем контент из текущего редактора перед сохранением
+    const content = this.getEditorContent();
+    if (content) {
+      this.articleForm.patchValue({ content });
     }
 
     // Собираем значения опций (только заполненные строки)
@@ -2221,9 +2854,9 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   saveArticle(): void {
     const formValue = this.articleForm.value;
     
-    // Преобразуем element_id в формат, который ожидает API
-    if (!formValue.element_id || formValue.element_id === '' || formValue.element_id === null) {
-      formValue.element_id = null;
+    // Преобразуем model_id в формат, который ожидает API
+    if (!formValue.model_id || formValue.model_id === '' || formValue.model_id === null) {
+      formValue.model_id = null;
     }
     
     // Убеждаемся, что tag_ids - это массив
@@ -2233,15 +2866,15 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
     
     // Определяем категорию из URL для перенаправления
     const url = this.router.url;
-    const elementMatch = url.match(/\/elements\/([^\/]+)\/articles\/new/);
-    const elementId = elementMatch ? elementMatch[1] : null;
+    const categoryMatch = url.match(/\/categories\/([^\/]+)\/articles\/new/);
+    const categoryId = categoryMatch ? categoryMatch[1] : null;
     
     if (this.isEditMode && this.articleId) {
       this.articleService.updateArticle(this.articleId, formValue).subscribe({
         next: (article) => {
-          // Если редактировали из элемента, возвращаемся туда, иначе на страницу статьи
-          if (elementId) {
-            this.router.navigate(['/elements', elementId]);
+          // Если редактировали из категории, возвращаемся туда, иначе на страницу статьи
+          if (categoryId) {
+            this.router.navigate(['/categories', categoryId]);
           } else {
             this.router.navigate(['/articles', article.id]);
           }
@@ -2258,9 +2891,16 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
           this.articleId = article.id;
           this.isEditMode = true;
           
-          // Если создали из элемента, возвращаемся туда, иначе остаемся на странице редактирования
-          if (elementId) {
-            this.router.navigate(['/elements', elementId]);
+          // Обновляем upload adapter для CKEditor, если он активен
+          if (this.editorType === 'ckeditor' && this.ckeditorInstance && this.articleId) {
+            this.ckeditorInstance.plugins.get('FileRepository').createUploadAdapter = (loader: any) => {
+              return new CkeditorUploadAdapter(loader, this.articleService, this.articleId!);
+            };
+          }
+          
+          // Если создали из категории, возвращаемся туда, иначе остаемся на странице редактирования
+          if (categoryId) {
+            this.router.navigate(['/categories', categoryId]);
           } else {
             // Не перенаправляем, остаемся на странице редактирования для возможности загрузки изображений
             this.saving = false;
@@ -2278,12 +2918,12 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
   cancel(): void {
     // Определяем категорию из URL для перенаправления
     const url = this.router.url;
-    const elementMatch = url.match(/\/elements\/([^\/]+)\/articles\/new/);
-    const elementId = elementMatch ? elementMatch[1] : null;
+    const categoryMatch = url.match(/\/categories\/([^\/]+)\/articles\/new/);
+    const categoryId = categoryMatch ? categoryMatch[1] : null;
     
-    if (elementId) {
-      // Возвращаемся на страницу элемента
-      this.router.navigate(['/elements', elementId]);
+    if (categoryId) {
+      // Возвращаемся на страницу категории
+      this.router.navigate(['/categories', categoryId]);
     } else if (this.articleId) {
       // Возвращаемся на страницу статьи
       this.router.navigate(['/articles', this.articleId]);
@@ -2526,6 +3166,88 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         this.error = err.error?.error || err.error?.detail || 'Ошибка при снятии статьи с публикации';
       }
     });
+  }
+
+  openChartConfigDialog(component: any): void {
+    if (!this.chartConfigDialog) {
+      return;
+    }
+
+    // Получаем текущую конфигурацию из компонента
+    const el = component.getEl();
+    let existingConfig: ChartConfig | undefined;
+    
+    if (el && el.getAttribute) {
+      const configAttr = el.getAttribute('data-chart-config');
+      if (configAttr && configAttr !== '{}') {
+        try {
+          existingConfig = JSON.parse(configAttr);
+        } catch (e) {
+          console.error('Error parsing chart config:', e);
+        }
+      }
+    }
+
+    // Настраиваем обработчики диалога
+    this.chartConfigDialog.onSave = (config: ChartConfig) => {
+      this.saveChartConfig(component, config);
+    };
+
+    this.chartConfigDialog.onCancel = () => {
+      // Ничего не делаем при отмене
+    };
+
+    // Открываем диалог
+    this.chartConfigDialog.open(existingConfig);
+  }
+
+  saveChartConfig(component: any, config: ChartConfig): void {
+    if (!this.editor || !component) {
+      return;
+    }
+
+    try {
+      // Сохраняем конфигурацию в атрибуты компонента GrapesJS
+      const configJson = JSON.stringify(config);
+      
+      // Устанавливаем атрибут через API GrapesJS
+      // Используем addAttributes для добавления/обновления атрибута
+      const currentAttrs = component.getAttributes() || {};
+      currentAttrs['data-chart-config'] = configJson;
+      component.setAttributes(currentAttrs);
+      
+      // Также обновляем внутренний HTML для отображения
+      const title = config.title || 'График';
+      const seriesCount = config.series ? config.series.length : 0;
+      const innerHTML = `<div style="padding: 20px; text-align: center; background-color: #e7f3ff; border: 2px solid #007bff; border-radius: 4px;">
+        <p style="margin: 0; color: #007bff; font-weight: bold;">📊 ${title}</p>
+        <p style="margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;">${seriesCount} график(ов) настроено</p>
+      </div>`;
+      
+      // Обновляем компонент
+      component.set('content', innerHTML);
+      
+      // Убеждаемся, что атрибут сохранен в DOM
+      const el = component.getEl();
+      if (el) {
+        el.setAttribute('data-chart-config', configJson);
+      }
+
+      // Принудительно обновляем компонент
+      component.trigger('change:attributes');
+      component.trigger('change:content');
+
+      // Синхронизируем с формой
+      setTimeout(() => {
+        const html = this.editor.getHtml ? this.editor.getHtml() : '';
+        const css = this.editor.getCss ? this.editor.getCss() : '';
+        const content = `<style>${css}</style>${html}`;
+        this.articleForm.patchValue({ content }, { emitEvent: false });
+      }, 100);
+    } catch (error) {
+      console.error('Error saving chart config:', error);
+      this.error = 'Ошибка сохранения конфигурации графика';
+    }
   }
 
 }

@@ -1,7 +1,7 @@
 <div class="container-fluid">
-  <div class="article-list-header" *ngIf="element">
+  <div class="article-list-header" *ngIf="category">
     <div>
-      <h1>{{ element.name }}</h1>
+      <h1>{{ category.name }}</h1>
     </div>
     <div class="actions">
       <input 
@@ -39,9 +39,20 @@
           </svg>
         </button>
       </div>
-      <a *ngIf="isAuthenticated()" [routerLink]="['/elements', element.id, 'articles', 'new']" class="btn btn-primary">
+      <a *ngIf="isAuthenticated()" [routerLink]="['/categories', category.id, 'articles', 'new']" class="btn btn-primary">
         Новая статья
       </a>
+    </div>
+  </div>
+  
+  <div *ngIf="models && models.length > 0" class="elements-list">
+    <h2>Элементы</h2>
+    <div class="elements-grid">
+      <div class="element-card card" *ngFor="let model of models">
+        <a [routerLink]="['/models', model.id]" class="element-link">
+          <h3>{{ model.name }}</h3>
+        </a>
+      </div>
     </div>
   </div>
   
@@ -56,7 +67,7 @@
   <div *ngIf="loading" class="loading">Загрузка...</div>
   
   <div *ngIf="!loading && articles.length === 0" class="empty-state">
-    <p>В этом элементе пока нет статей</p>
+    <p>В этой категории пока нет статей</p>
   </div>
   
   <div 
@@ -67,11 +78,14 @@
     <div class="card article-card" [class.draft-card]="!article.is_published" *ngFor="let article of articles">
       <div class="article-header">
         <h3>
-          <span *ngIf="article.element?.technology">
-            <a [routerLink]="['/technologies', article.element?.technology?.id]" class="hierarchy-link">{{ article.element?.technology?.name }}</a> / 
+          <span *ngIf="article.model?.category?.technology">
+            <a [routerLink]="['/technologies', article.model?.category?.technology?.id]" class="hierarchy-link">{{ article.model?.category?.technology?.name }}</a> / 
           </span>
-          <span *ngIf="article.element">
-            <a [routerLink]="['/elements', article.element.id]" class="hierarchy-link">{{ article.element.name }}</a> / 
+          <span *ngIf="article.model?.category">
+            <a [routerLink]="['/categories', article.model?.category?.id]" class="hierarchy-link">{{ article.model?.category?.name }}</a> / 
+          </span>
+          <span *ngIf="article.model">
+            <a [routerLink]="['/models', article.model.id]" class="hierarchy-link">{{ article.model.name }}</a> / 
           </span>
           <a [routerLink]="['/articles', article.id]">{{ article.model_name }}</a>
         </h3>
@@ -82,6 +96,14 @@
           <span class="option-name">{{ optionValue.option.name }}:</span>
           <span class="option-value">{{ optionValue.value }}</span>
         </div>
+      </div>
+      <div class="article-meta">
+        <span *ngIf="article.latest_version">
+          Изменено: {{ article.latest_version.author.username }}, {{ article.latest_version.created_at | date:'dd.MM.yyyy, HH:mm' }}
+        </span>
+        <span *ngIf="!article.latest_version">
+          Изменено: {{ article.author.username }}, {{ article.updated_at | date:'dd.MM.yyyy, HH:mm' }}
+        </span>
       </div>
     </div>
   </div>

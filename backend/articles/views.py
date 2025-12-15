@@ -5,8 +5,8 @@ from rest_framework.response import Response
 from django.db.models import Q, F
 from django.db.models.functions import Lower
 from django.utils import timezone
-from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Element, Technology, Tag, ArticleOption, ArticleOptionValue, Group, ArticleTemplate, Comment
-from .serializers import ArticleSerializer, ArticleListSerializer, ArticleVersionSerializer, ArticleImageSerializer, ArticleAttachmentSerializer, ElementSerializer, TechnologySerializer, TagSerializer, ArticleOptionSerializer, ArticleOptionValueSerializer, GroupSerializer, GroupDetailSerializer, ArticleTemplateSerializer, CommentSerializer
+from .models import Article, ArticleVersion, ArticleImage, ArticleAttachment, Category, Model, Technology, Tag, ArticleOption, ArticleOptionValue, Group, ArticleTemplate, Comment
+from .serializers import ArticleSerializer, ArticleListSerializer, ArticleVersionSerializer, ArticleImageSerializer, ArticleAttachmentSerializer, CategorySerializer, ModelSerializer, TechnologySerializer, TagSerializer, ArticleOptionSerializer, ArticleOptionValueSerializer, GroupSerializer, GroupDetailSerializer, ArticleTemplateSerializer, CommentSerializer
 from .permissions import ArticlePermission
 from .word_import_processor import WordImportProcessor
 import mammoth
@@ -388,10 +388,10 @@ class ArticleViewSet(viewsets.ModelViewSet):
         if is_published is not None:
             queryset = queryset.filter(is_published=is_published.lower() == 'true')
         
-        # Фильтр по элементу
-        element_id = self.request.query_params.get('element', None)
-        if element_id:
-            queryset = queryset.filter(element_id=element_id)
+        # Фильтр по модели
+        model_id = self.request.query_params.get('model', None)
+        if model_id:
+            queryset = queryset.filter(model_id=model_id)
         
         # Фильтр по тегам (можно передать несколько через tags=id1&tags=id2)
         tag_ids = self.request.query_params.getlist('tags')
@@ -414,7 +414,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
                         option_values__value__iregex=f'.*{option_value_escaped}.*'
                     ).distinct()
         
-        return queryset.select_related('author', 'element').prefetch_related(
+        return queryset.select_related('author', 'model').prefetch_related(
             'can_view', 'can_edit', 'can_delete', 'tags', 'images', 'versions',
             'option_values__option'
         )
@@ -883,29 +883,58 @@ class TechnologyViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = TechnologySerializer
     permission_classes = [permissions.IsAuthenticated]  # Требуется авторизация
+    pagination_class = None  # Отключаем пагинацию для технологий
     
     def get_queryset(self):
         """Возвращает все технологии"""
-        return Technology.objects.all().order_by('sort_order', 'name').prefetch_related('elements')
+        return Technology.objects.all().order_by('sort_order', 'name').prefetch_related('categories')
     
     def get_serializer_context(self):
-        """Передаем request в контекст сериализатора для фильтрации элементов"""
+        """Передаем request в контекст сериализатора для фильтрации категорий"""
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
 
 
-class ElementViewSet(viewsets.ReadOnlyModelViewSet):
+class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet для просмотра элементов (только чтение, создание/редактирование через админку)
-    Показывает все элементы (права проверяются на уровне статей)
+    ViewSet для просмотра категорий (только чтение, создание/редактирование через админку)
+    Показывает все категории (права проверяются на уровне статей)
     """
-    serializer_class = ElementSerializer
+    serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated]  # Требуется авторизация
+    pagination_class = None  # Отключаем пагинацию для категорий
     
     def get_queryset(self):
-        """Возвращает все элементы"""
-        return Element.objects.all().order_by('technology', 'sort_order', 'name').select_related('technology')
+        """Возвращает все категории"""
+        return Category.objects.all().order_by('technology', 'sort_order', 'name').select_related('technology').prefetch_related('models')
+    
+    def get_serializer_context(self):
+        """Передает request в контекст сериализатора для определения прав пользователя"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+
+class ModelViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet для просмотра моделей (только чтение, создание/редактирование через админку)
+    Показывает все модели (права проверяются на уровне статей)
+    """
+    serializer_class = ModelSerializer
+    permission_classes = [permissions.IsAuthenticated]  # Требуется авторизация
+    pagination_class = None  # Отключаем пагинацию для моделей
+    
+    def get_queryset(self):
+        """Возвращает все модели с возможностью фильтрации по категории"""
+        queryset = Model.objects.all().order_by('category', 'sort_order', 'name').select_related('category')
+        
+        # Фильтр по категории
+        category_id = self.request.query_params.get('category', None)
+        if category_id:
+            queryset = queryset.filter(category_id=category_id)
+        
+        return queryset
     
     def get_serializer_context(self):
         """Передает request в контекст сериализатора для определения прав пользователя"""
@@ -1009,10 +1038,12 @@ class CommentViewSet(viewsets.ModelViewSet):
     ViewSet для управления комментариями к статьям
     Комментировать можно только опубликованные статьи
     Доступ имеют пользователи с правами read/edit
+    Удаление комментариев отключено
     """
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [ArticlePermission]
+    http_method_names = ['get', 'post', 'put', 'patch', 'head', 'options']  # Исключаем delete
     
     def get_queryset(self):
         """Фильтруем комментарии по статье"""
@@ -1061,14 +1092,4 @@ class CommentViewSet(viewsets.ModelViewSet):
             raise permissions.PermissionDenied('Вы можете редактировать только свои комментарии')
         
         serializer.save()
-    
-    def perform_destroy(self, instance):
-        """Удаление комментария - только автор может удалять"""
-        user = self.request.user
-        
-        # Только автор может удалять свой комментарий
-        if instance.author != user and not user.is_superuser:
-            raise permissions.PermissionDenied('Вы можете удалять только свои комментарии')
-        
-        instance.delete()
 

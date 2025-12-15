@@ -6,22 +6,22 @@
       <h1>{{ technology.name }}</h1>
     </div>
     
-    <div *ngIf="technology.elements && technology.elements.length > 0" class="elements-list">
-      <h2>Элементы</h2>
+    <div *ngIf="technology.categories && technology.categories.length > 0" class="elements-list">
+      <h2>Категории</h2>
       <div class="elements-grid">
-        <div class="element-card card" *ngFor="let element of technology.elements">
-          <a [routerLink]="['/elements', element.id]" class="element-link">
-            <h3>{{ element.name }}</h3>
+        <div class="element-card card" *ngFor="let category of technology.categories">
+          <a [routerLink]="['/categories', category.id]" class="element-link">
+            <h3>{{ category.name }}</h3>
           </a>
         </div>
       </div>
     </div>
     
-    <div *ngIf="!technology.elements || technology.elements.length === 0" class="empty-state">
-      <p>В этой технологии пока нет элементов</p>
+    <div *ngIf="!technology.categories || technology.categories.length === 0" class="empty-state">
+      <p>В этой технологии пока нет категорий</p>
     </div>
 
-    <div *ngIf="technology.elements && technology.elements.length > 0" class="articles-list">
+    <div *ngIf="technology.categories && technology.categories.length > 0" class="articles-list">
       <h2>Статьи</h2>
       <div *ngIf="loadingArticles" class="loading">Загрузка статей...</div>
       
@@ -33,8 +33,14 @@
         <div class="card article-card" [class.draft-card]="!article.is_published" *ngFor="let article of articles">
           <div class="article-header">
             <h3>
-              <span *ngIf="article.element">
-                <a [routerLink]="['/elements', article.element.id]" class="hierarchy-link">{{ article.element.name }}</a> / 
+              <span *ngIf="article.model?.category?.technology">
+                <a [routerLink]="['/technologies', article.model?.category?.technology?.id]" class="hierarchy-link">{{ article.model?.category?.technology?.name }}</a> / 
+              </span>
+              <span *ngIf="article.model?.category">
+                <a [routerLink]="['/categories', article.model?.category?.id]" class="hierarchy-link">{{ article.model?.category?.name }}</a> / 
+              </span>
+              <span *ngIf="article.model">
+                <a [routerLink]="['/models', article.model.id]" class="hierarchy-link">{{ article.model.name }}</a> / 
               </span>
               <a [routerLink]="['/articles', article.id]">{{ article.model_name }}</a>
             </h3>
@@ -45,6 +51,14 @@
               <span class="option-name">{{ optionValue.option.name }}:</span>
               <span class="option-value">{{ optionValue.value }}</span>
             </div>
+          </div>
+          <div class="article-meta">
+            <span *ngIf="article.latest_version">
+              Изменено: {{ article.latest_version.author.username }}, {{ article.latest_version.created_at | date:'dd.MM.yyyy, HH:mm' }}
+            </span>
+            <span *ngIf="!article.latest_version">
+              Изменено: {{ article.author.username }}, {{ article.updated_at | date:'dd.MM.yyyy, HH:mm' }}
+            </span>
           </div>
         </div>
       </div>

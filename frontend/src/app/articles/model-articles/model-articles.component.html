@@ -1,6 +1,8 @@
 <div class="container-fluid">
-  <div class="article-list-header">
-    <h1>Статьи</h1>
+  <div class="article-list-header" *ngIf="model">
+    <div>
+      <h1>{{ model.name }}</h1>
+    </div>
     <div class="actions">
       <input 
         type="text" 
@@ -8,6 +10,7 @@
         [(ngModel)]="searchQuery"
         (input)="onSearch()"
         class="search-input"
+        [ngModelOptions]="{standalone: true}"
       />
       <div class="view-toggle">
         <button 
@@ -36,7 +39,7 @@
           </svg>
         </button>
       </div>
-      <a *ngIf="isAuthenticated()" routerLink="/articles/new" class="btn btn-primary">
+      <a *ngIf="isAuthenticated() && model?.category" [routerLink]="['/categories', model?.category?.id, 'articles', 'new']" class="btn btn-primary">
         Новая статья
       </a>
     </div>
@@ -53,7 +56,7 @@
   <div *ngIf="loading" class="loading">Загрузка...</div>
   
   <div *ngIf="!loading && articles.length === 0" class="empty-state">
-    <p>Статьи не найдены</p>
+    <p>В этой модели пока нет статей</p>
   </div>
   
   <div 

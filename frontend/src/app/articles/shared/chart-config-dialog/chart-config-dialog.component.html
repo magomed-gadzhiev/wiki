@@ -1,0 +1,185 @@
+<div class="modal-overlay" *ngIf="showDialog">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Настройка графика</h5>
+        <button type="button" class="btn-close" (click)="cancel()" aria-label="Close"></button>
+      </div>
+      
+      <form [formGroup]="chartForm" (ngSubmit)="save()">
+        <div class="modal-body">
+          <!-- Общие настройки -->
+          <div class="form-section">
+            <h6>Общие настройки</h6>
+            
+            <div class="mb-3">
+              <label for="title" class="form-label">Название графика</label>
+              <input type="text" class="form-control" id="title" formControlName="title" placeholder="Введите название графика">
+            </div>
+            
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="xAxisLabel" class="form-label">Подпись оси X</label>
+                  <input type="text" class="form-control" id="xAxisLabel" formControlName="xAxisLabel" placeholder="X">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="yAxisLabel" class="form-label">Подпись оси Y</label>
+                  <input type="text" class="form-control" id="yAxisLabel" formControlName="yAxisLabel" placeholder="Y">
+                </div>
+              </div>
+            </div>
+            
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="xMin" class="form-label">Минимум X (необязательно)</label>
+                  <input type="number" class="form-control" id="xMin" formControlName="xMin" step="any">
+                </div>
+                <div class="mb-3">
+                  <label for="xMax" class="form-label">Максимум X (необязательно)</label>
+                  <input type="number" class="form-control" id="xMax" formControlName="xMax" step="any">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="yMin" class="form-label">Минимум Y (необязательно)</label>
+                  <input type="number" class="form-control" id="yMin" formControlName="yMin" step="any">
+                </div>
+                <div class="mb-3">
+                  <label for="yMax" class="form-label">Максимум Y (необязательно)</label>
+                  <input type="number" class="form-control" id="yMax" formControlName="yMax" step="any">
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Серии данных -->
+          <div class="form-section">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6>Графики (серии данных)</h6>
+              <button type="button" class="btn btn-sm btn-primary" (click)="addSeries()">
+                + Добавить график
+              </button>
+            </div>
+            
+            <div formArrayName="series" *ngFor="let seriesGroup of seriesControls; let i = index">
+              <div class="series-item" [formGroupName]="i">
+                <div class="series-header">
+                  <h6>График {{ i + 1 }}</h6>
+                  <button 
+                    type="button" 
+                    class="btn btn-sm btn-danger" 
+                    (click)="removeSeries(i)"
+                    [disabled]="seriesFormArray.length <= 1">
+                    Удалить
+                  </button>
+                </div>
+                
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label [for]="'name-' + i" class="form-label">Название графика *</label>
+                      <input 
+                        type="text" 
+                        class="form-control" 
+                        [id]="'name-' + i" 
+                        formControlName="name" 
+                        placeholder="Введите название"
+                        [class.is-invalid]="seriesGroup.get('name')?.invalid && seriesGroup.get('name')?.touched">
+                      <div class="invalid-feedback" *ngIf="seriesGroup.get('name')?.invalid && seriesGroup.get('name')?.touched">
+                        {{ getSeriesErrorMessage(i, 'name') }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label [for]="'color-' + i" class="form-label">Цвет линии *</label>
+                      <input 
+                        type="color" 
+                        class="form-control form-control-color" 
+                        [id]="'color-' + i" 
+                        formControlName="color"
+                        [class.is-invalid]="seriesGroup.get('color')?.invalid && seriesGroup.get('color')?.touched">
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label [for]="'lineWidth-' + i" class="form-label">Толщина линии *</label>
+                      <input 
+                        type="number" 
+                        class="form-control" 
+                        [id]="'lineWidth-' + i" 
+                        formControlName="lineWidth" 
+                        min="1" 
+                        max="10"
+                        [class.is-invalid]="seriesGroup.get('lineWidth')?.invalid && seriesGroup.get('lineWidth')?.touched">
+                      <div class="invalid-feedback" *ngIf="seriesGroup.get('lineWidth')?.invalid && seriesGroup.get('lineWidth')?.touched">
+                        {{ getSeriesErrorMessage(i, 'lineWidth') }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label [for]="'lineStyle-' + i" class="form-label">Стиль линии *</label>
+                      <select 
+                        class="form-select" 
+                        [id]="'lineStyle-' + i" 
+                        formControlName="lineStyle"
+                        [class.is-invalid]="seriesGroup.get('lineStyle')?.invalid && seriesGroup.get('lineStyle')?.touched">
+                        <option value="solid">Сплошная</option>
+                        <option value="dashed">Пунктирная</option>
+                        <option value="dotted">Точечная</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label [for]="'csvFile-' + i" class="form-label">CSV файл *</label>
+                      <input 
+                        type="file" 
+                        class="form-control" 
+                        [id]="'csvFile-' + i" 
+                        accept=".csv"
+                        (change)="onFileSelected($event, i)"
+                        #fileInput>
+                      <small class="form-text text-muted">Файл должен содержать две колонки: X и Y</small>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="mb-3">
+                  <label [for]="'csvData-' + i" class="form-label">Данные (JSON) *</label>
+                  <textarea 
+                    class="form-control" 
+                    [id]="'csvData-' + i" 
+                    formControlName="csvData" 
+                    rows="5"
+                    placeholder='[{"x": 1, "y": 2}, {"x": 2, "y": 4}, ...]'
+                    [class.is-invalid]="seriesGroup.get('csvData')?.invalid && seriesGroup.get('csvData')?.touched"></textarea>
+                  <div class="invalid-feedback" *ngIf="seriesGroup.get('csvData')?.invalid && seriesGroup.get('csvData')?.touched">
+                    {{ getSeriesErrorMessage(i, 'csvData') }}
+                  </div>
+                  <small class="form-text text-muted">
+                    Данные в формате JSON. Можно загрузить из CSV файла или ввести вручную.
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="cancel()">Отмена</button>
+          <button type="submit" class="btn btn-primary" [disabled]="chartForm.invalid">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+

@@ -32,27 +32,27 @@
             (click)="$event.stopPropagation()"
           >
             <li 
-              *ngFor="let element of technology.elements"
+              *ngFor="let category of (technology.categories || [])"
             >
               <a 
                 class="dropdown-item"
-                [routerLink]="['/elements', element.id]" 
+                [routerLink]="['/categories', category.id]" 
                 routerLinkActive="active"
                 (click)="closeDropdown(technology.id)"
               >
-                {{ element.name }}
+                {{ category.name }}
               </a>
             </li>
           </ul>
         </li>
-        <li *ngFor="let element of elementsWithoutTechnology" class="nav-item">
+        <li *ngFor="let category of categoriesWithoutTechnology" class="nav-item">
           <a 
             class="nav-link"
-            [routerLink]="['/elements', element.id]" 
+            [routerLink]="['/categories', category.id]" 
             routerLinkActive="active"
-            [attr.aria-current]="isElementActive(element.id) ? 'page' : null"
+            [attr.aria-current]="isCategoryActive(category.id) ? 'page' : null"
           >
-            {{ element.name }}
+            {{ category.name }}
           </a>
         </li>
       </ul>

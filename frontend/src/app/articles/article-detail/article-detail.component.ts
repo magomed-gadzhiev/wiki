@@ -7,6 +7,8 @@ import { Article } from '../../core/models/article.model';
 import { AuthService } from '../../core/services/auth.service';
 import { ArticleCommentsComponent } from '../article-comments/article-comments.component';
 import { ArticleTocComponent } from '../article-toc/article-toc.component';
+import * as Plotly from 'plotly.js-dist-min';
+import { ChartConfig } from '../shared/chart-viewer/chart-viewer.component';
 
 @Component({
   selector: 'app-article-detail',
@@ -23,10 +25,8 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
   error: string | null = null;
   sanitizedContent: SafeHtml = '';
   private styleElement: HTMLStyleElement | null = null;
-
-  get contentElement(): HTMLElement | null {
-    return this.articleContent?.nativeElement || null;
-  }
+  private chartInstances: HTMLElement[] = [];
+  contentElement: HTMLElement | null = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -45,6 +45,12 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   ngAfterViewInit(): void {
+    // Устанавливаем contentElement после инициализации представления
+    if (this.articleContent) {
+      this.contentElement = this.articleContent.nativeElement;
+      this.cdr.detectChanges();
+    }
+
     // Убеждаемся, что стили применены после инициализации представления
     // Это нужно, если статья загрузилась до инициализации представления
     if (this.article && this.article.content && !this.styleElement) {
@@ -59,10 +65,10 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
       }, 100);
     }
     
-    // Добавляем ID к заголовкам после рендеринга
+    // Инициализируем графики после рендеринга
     if (this.articleContent) {
       setTimeout(() => {
-        this.addIdsToHeadingsInDOM();
+        this.initializeCharts();
       }, 200);
     }
   }
@@ -114,9 +120,23 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
         this.processArticleContent(article.content);
         this.loading = false;
         
-        // Добавляем ID к заголовкам после загрузки контента
+        // Обновляем contentElement после загрузки статьи
+        if (this.articleContent) {
+          this.contentElement = this.articleContent.nativeElement;
+          this.cdr.detectChanges();
+        } else {
+          // Если articleContent еще не готов, ждем немного
+          setTimeout(() => {
+            if (this.articleContent) {
+              this.contentElement = this.articleContent.nativeElement;
+              this.cdr.detectChanges();
+            }
+          }, 100);
+        }
+        
+        // Инициализируем графики после загрузки контента
         setTimeout(() => {
-          this.addIdsToHeadingsInDOM();
+          this.initializeCharts();
         }, 300);
       },
       error: (err) => {
@@ -141,10 +161,8 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
     // Убираем теги style из HTML для отображения
     let htmlWithoutStyles = content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').trim();
     
-    // Добавляем ID к заголовкам для навигации
-    htmlWithoutStyles = this.addIdsToHeadings(htmlWithoutStyles);
-    
     // Используем DomSanitizer для безопасного встраивания HTML
+    // ID к заголовкам уже добавлены на backend
     this.sanitizedContent = this.sanitizer.bypassSecurityTrustHtml(htmlWithoutStyles);
     
     // Добавляем стили в документ, если они есть
@@ -152,33 +170,16 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
       // Применяем стили с небольшой задержкой, чтобы DOM был готов
       setTimeout(() => {
         this.addArticleStyles(cssText);
+        this.initializeCharts();
       }, 50);
+    } else {
+      // Инициализируем графики даже если нет стилей
+      setTimeout(() => {
+        this.initializeCharts();
+      }, 100);
     }
   }
 
-  addIdsToHeadings(html: string): string {
-    // Просто возвращаем HTML как есть, ID будут добавлены в DOM
-    return html;
-  }
-
-  addIdsToHeadingsInDOM(): void {
-    if (!this.articleContent?.nativeElement) return;
-    
-    const headings = this.articleContent.nativeElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
-    let index = 0;
-    
-    headings.forEach((heading) => {
-      const htmlHeading = heading as HTMLElement;
-      if (!htmlHeading.id) {
-        const text = htmlHeading.textContent?.trim() || '';
-        if (text) {
-          const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9а-яё]+/g, '-').replace(/^-|-$/g, '').substring(0, 50)}`;
-          htmlHeading.id = id;
-          index++;
-        }
-      }
-    });
-  }
 
   addArticleStyles(cssText: string): void {
     // Удаляем старые стили
@@ -212,6 +213,309 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
   ngOnDestroy(): void {
     // Очищаем стили при уничтожении компонента
     this.removeArticleStyles();
+    // Уничтожаем все графики
+    this.destroyCharts();
+  }
+
+  initializeCharts(): void {
+    if (!this.articleContent?.nativeElement) {
+      return;
+    }
+
+    // Уничтожаем существующие графики
+    this.destroyCharts();
+
+    // Находим все контейнеры графиков
+    const chartContainers = this.articleContent.nativeElement.querySelectorAll('.wiki-chart-container');
+    
+    chartContainers.forEach((container) => {
+      const htmlContainer = container as HTMLElement;
+      const configAttr = htmlContainer.getAttribute('data-chart-config');
+      
+      if (!configAttr || configAttr === '{}') {
+        return;
+      }
+
+      try {
+        const config: ChartConfig = JSON.parse(configAttr);
+        
+        if (!config || !config.series || config.series.length === 0) {
+          return;
+        }
+
+        // Создаем контейнер для графика с элементами управления
+        const chartContainer = document.createElement('div');
+        chartContainer.style.cssText = 'position: relative; width: 100%; max-width: 100%; height: 500px; max-height: 500px; min-height: 400px; background-color: #fff; border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 0 auto;';
+        
+        // Создаем панель управления
+        const controlsDiv = document.createElement('div');
+        controlsDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;';
+        
+        const resetButton = document.createElement('button');
+        resetButton.type = 'button';
+        resetButton.className = 'btn btn-sm btn-secondary';
+        resetButton.textContent = '🔍 Сбросить масштаб';
+        resetButton.style.cssText = 'font-size: 0.875rem; padding: 0.25rem 0.75rem;';
+        resetButton.title = 'Сбросить масштаб';
+        
+        const hintsDiv = document.createElement('div');
+        hintsDiv.style.cssText = 'color: #6c757d; font-size: 0.75rem;';
+        hintsDiv.textContent = 'Колесо мыши: масштаб | Перетаскивание: перемещение';
+        
+        controlsDiv.appendChild(resetButton);
+        controlsDiv.appendChild(hintsDiv);
+        
+        // Создаем div для Plotly графика
+        const chartDiv = document.createElement('div');
+        chartDiv.style.cssText = 'width: 100% !important; max-width: 100%; height: calc(100% - 50px) !important; max-height: calc(100% - 50px) !important;';
+        
+        // Очищаем контейнер и добавляем элементы
+        htmlContainer.innerHTML = '';
+        htmlContainer.style.cssText = 'width: 100%; max-width: 100%; padding: 0; background-color: transparent; border: none;';
+        chartContainer.appendChild(controlsDiv);
+        chartContainer.appendChild(chartDiv);
+        htmlContainer.appendChild(chartContainer);
+
+        // Вычисляем диапазоны данных для центрирования
+        const allXValues: number[] = [];
+        const allYValues: number[] = [];
+        
+        config.series.forEach(series => {
+          series.data.forEach(point => {
+            const x = typeof point.x === 'number' ? point.x : parseFloat(String(point.x));
+            const y = typeof point.y === 'number' ? point.y : parseFloat(String(point.y));
+            if (!isNaN(x) && !isNaN(y)) {
+              allXValues.push(x);
+              allYValues.push(y);
+            }
+          });
+        });
+
+        // Создаем traces для Plotly
+        const traces = config.series.map((series) => {
+          const dash = this.getDashStyle(series.lineStyle || 'solid');
+          
+          // Преобразуем данные в массивы чисел и сортируем по x для правильного отображения линий
+          const sortedData = [...series.data]
+            .map(point => ({
+              x: typeof point.x === 'number' ? point.x : parseFloat(String(point.x)),
+              y: typeof point.y === 'number' ? point.y : parseFloat(String(point.y))
+            }))
+            .filter(point => !isNaN(point.x) && !isNaN(point.y))
+            .sort((a, b) => a.x - b.x);
+          
+          // Используем scattergl для большого количества точек (лучшая производительность)
+          const pointCount = sortedData.length;
+          const useScatterGL = pointCount > 1000;
+          
+          // Убеждаемся, что цвет непрозрачный (без альфа-канала)
+          const opaqueColor = this.ensureOpaqueColor(series.color);
+          
+          return {
+            x: sortedData.map(point => point.x),
+            y: sortedData.map(point => point.y),
+            type: useScatterGL ? 'scattergl' : 'scatter',
+            mode: 'lines+markers',
+            name: series.name,
+            opacity: 1,
+            line: {
+              color: opaqueColor,
+              width: Math.max(series.lineWidth || 2, 2), // Минимум 2px
+              dash: dash
+            },
+            marker: {
+              color: opaqueColor,
+              size: useScatterGL ? 5 : Math.max(8, Math.min(12, pointCount > 100 ? 8 : 10)),
+              opacity: 1,
+              line: {
+                color: '#fff',
+                width: 1.5
+              }
+            },
+            hovertemplate: `<b>${series.name}</b><br>` +
+              `${config.xAxisLabel || 'X'}: %{x}<br>` +
+              `${config.yAxisLabel || 'Y'}: %{y}<extra></extra>`
+          };
+        });
+
+        // Определяем диапазоны осей
+        let xRange: number[] | undefined;
+        let yRange: number[] | undefined;
+        
+        if (config.xMin !== undefined && config.xMax !== undefined) {
+          xRange = [config.xMin, config.xMax];
+        } else if (allXValues.length > 0) {
+          const xMin = Math.min(...allXValues);
+          const xMax = Math.max(...allXValues);
+          const xPadding = (xMax - xMin) * 0.05 || 1; // 5% отступа или минимум 1
+          xRange = [xMin - xPadding, xMax + xPadding];
+        }
+        
+        if (config.yMin !== undefined && config.yMax !== undefined) {
+          yRange = [config.yMin, config.yMax];
+        } else if (allYValues.length > 0) {
+          const yMin = Math.min(...allYValues);
+          const yMax = Math.max(...allYValues);
+          const yPadding = (yMax - yMin) * 0.05 || 1; // 5% отступа или минимум 1
+          yRange = [yMin - yPadding, yMax + yPadding];
+        }
+
+        const layout: Partial<Plotly.Layout> = {
+          title: config.title ? {
+            text: config.title,
+            font: {
+              size: 16,
+              family: 'Arial, sans-serif'
+            }
+          } : undefined,
+          xaxis: {
+            type: 'linear',
+            title: {
+              text: config.xAxisLabel || 'X',
+              font: {
+                size: 12,
+                family: 'Arial, sans-serif'
+              }
+            },
+            range: xRange,
+            autorange: xRange === undefined,
+            showgrid: true,
+            gridcolor: 'rgba(0, 0, 0, 0.1)',
+            zeroline: false
+          },
+          yaxis: {
+            type: 'linear',
+            title: {
+              text: config.yAxisLabel || 'Y',
+              font: {
+                size: 12,
+                family: 'Arial, sans-serif'
+              }
+            },
+            range: yRange,
+            autorange: yRange === undefined,
+            showgrid: true,
+            gridcolor: 'rgba(0, 0, 0, 0.1)',
+            zeroline: false
+          },
+          legend: {
+            x: 0,
+            y: 1,
+            bgcolor: 'rgba(255, 255, 255, 0.8)',
+            bordercolor: 'rgba(0, 0, 0, 0.2)',
+            borderwidth: 1
+          },
+          hovermode: 'closest',
+          margin: {
+            l: 60,
+            r: 20,
+            t: config.title ? 60 : 20,
+            b: 60
+          },
+          autosize: true
+        };
+
+        const plotlyConfig: Partial<Plotly.Config> = {
+          responsive: true,
+          displayModeBar: true,
+          displaylogo: false,
+          modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+          toImageButtonOptions: {
+            format: 'png',
+            filename: 'chart',
+            height: 500,
+            width: 800,
+            scale: 1
+          }
+        };
+
+        Plotly.newPlot(
+          chartDiv,
+          traces,
+          layout,
+          plotlyConfig
+        ).then(() => {
+          this.chartInstances.push(chartDiv);
+          
+          // Настраиваем обработчик кнопки сброса zoom
+          resetButton.addEventListener('click', () => {
+            Plotly.relayout(chartDiv, {
+              'xaxis.range': xRange,
+              'xaxis.autorange': xRange === undefined,
+              'yaxis.range': yRange,
+              'yaxis.autorange': yRange === undefined
+            });
+          });
+        });
+      } catch (error) {
+        console.error('Error initializing chart:', error);
+        htmlContainer.innerHTML = '<p style="color: #dc3545; padding: 20px; text-align: center;">Ошибка загрузки графика</p>';
+      }
+    });
+  }
+
+  destroyCharts(): void {
+    this.chartInstances.forEach(chartDiv => {
+      try {
+        Plotly.purge(chartDiv);
+      } catch (e) {
+        // Игнорируем ошибки при уничтожении
+      }
+    });
+    this.chartInstances = [];
+  }
+
+  private getDashStyle(style: 'solid' | 'dashed' | 'dotted'): string {
+    switch (style) {
+      case 'dashed':
+        return 'dash';
+      case 'dotted':
+        return 'dot';
+      case 'solid':
+      default:
+        return 'solid';
+    }
+  }
+
+  private ensureOpaqueColor(color: string): string {
+    // Если цвет в формате rgba с прозрачностью, преобразуем в rgb
+    if (color.startsWith('rgba')) {
+      const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/);
+      if (match) {
+        return `rgb(${match[1]}, ${match[2]}, ${match[3]})`;
+      }
+    }
+    // Если цвет в hex формате, убеждаемся что он полный (6 символов)
+    if (color.startsWith('#')) {
+      // Убираем альфа-канал если есть
+      if (color.length === 9) {
+        return color.substring(0, 7);
+      }
+      return color;
+    }
+    return color;
+  }
+
+  private getCenteredMin(values: number[]): number {
+    if (values.length === 0) return 0;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const center = (min + max) / 2;
+    const range = max - min;
+    // Добавляем 20% отступа с каждой стороны для лучшей видимости
+    const padding = range * 0.2;
+    return center - (range / 2 + padding);
+  }
+
+  private getCenteredMax(values: number[]): number {
+    if (values.length === 0) return 0;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const center = (min + max) / 2;
+    const range = max - min;
+    // Добавляем 20% отступа с каждой стороны для лучшей видимости
+    const padding = range * 0.2;
+    return center + (range / 2 + padding);
   }
 
   deleteArticle(): void {

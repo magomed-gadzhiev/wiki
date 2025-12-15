@@ -29,11 +29,15 @@ export const routes: Routes = [
     loadComponent: () => import('./articles/technology-articles/technology-articles.component').then(m => m.TechnologyArticlesComponent)
   },
   {
-    path: 'elements/:id',
+    path: 'categories/:id',
     loadComponent: () => import('./articles/category-articles/category-articles.component').then(m => m.CategoryArticlesComponent)
   },
   {
-    path: 'elements/:id/articles/new',
+    path: 'models/:id',
+    loadComponent: () => import('./articles/model-articles/model-articles.component').then(m => m.ModelArticlesComponent)
+  },
+  {
+    path: 'categories/:id/articles/new',
     loadComponent: () => import('./articles/article-editor/article-editor.component').then(m => m.ArticleEditorComponent),
     canActivate: [authGuard]
   },

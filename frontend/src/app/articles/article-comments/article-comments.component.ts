@@ -259,11 +259,6 @@ export class ArticleCommentsComponent implements OnInit, AfterViewInit, OnDestro
     return this.authService.getCurrentUser();
   }
 
-  isCommentAuthor(comment: Comment): boolean {
-    const user = this.getCurrentUser();
-    return !!(user && comment.author.id === user.id);
-  }
-
   loadComments(): void {
     if (!this.article?.id) return;
     
@@ -336,6 +331,10 @@ export class ArticleCommentsComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   startReply(comment: Comment): void {
+    // Можно отвечать только на комментарии верхнего уровня
+    if (comment.parent) {
+      return;
+    }
     // Закрываем предыдущий редактор, если был открыт
     if (this.replyingTo && this.replyingTo.id !== comment.id) {
       this.cancelReply();
@@ -384,32 +383,6 @@ export class ArticleCommentsComponent implements OnInit, AfterViewInit, OnDestro
     });
   }
 
-  deleteComment(comment: Comment): void {
-    // Определяем, удаляется ли основной комментарий или ответ
-    const isReply = comment.parent !== null && comment.parent !== undefined;
-    const message = isReply 
-      ? 'Вы уверены, что хотите удалить этот ответ?' 
-      : 'Вы уверены, что хотите удалить этот комментарий? При удалении также будут удалены все ответы на него.';
-    
-    if (!confirm(message)) {
-      return;
-    }
-
-    this.commentService.deleteComment(comment.id).subscribe({
-      next: () => {
-        // Если удаляется комментарий, на который мы отвечали, закрываем форму ответа
-        if (this.replyingTo && (this.replyingTo.id === comment.id || this.replyingTo.id === comment.parent)) {
-          this.cancelReply();
-        }
-        // Перезагружаем комментарии для обновления списка
-        // Это важно, так как при удалении родительского комментария все ответы удаляются каскадно
-        this.loadComments();
-      },
-      error: (err) => {
-        this.error = err.error?.error || 'Ошибка удаления комментария';
-      }
-    });
-  }
 
   formatDate(dateString: string): string {
     const date = new Date(dateString);

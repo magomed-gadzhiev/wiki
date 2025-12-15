@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { ArticleService } from '../../core/services/article.service';
-import { Technology, Element, Tag, ArticleOption, ArticleTemplate } from '../../core/models/article.model';
+import { Technology, Category, Model, Tag, ArticleOption, ArticleTemplate } from '../../core/models/article.model';
 
 @Component({
   selector: 'app-article-create-wizard',
@@ -14,13 +14,16 @@ import { Technology, Element, Tag, ArticleOption, ArticleTemplate } from '../../
 })
 export class ArticleCreateWizardComponent implements OnInit {
   currentStep = 1;
-  totalSteps = 7;
+  totalSteps = 8;
   
   articleForm: FormGroup;
   
   technologies: Technology[] = [];
   selectedTechnology: Technology | null = null;
-  availableElements: Element[] = [];
+  availableCategories: Category[] = [];
+  selectedCategory: Category | null = null;
+  availableModels: Model[] = [];
+  allModels: Model[] = [];
   
   options: ArticleOption[] = [];
   optionValuesList: Array<{ option_id: string | null; value: string }> = [];
@@ -44,7 +47,8 @@ export class ArticleCreateWizardComponent implements OnInit {
   ) {
     this.articleForm = this.fb.group({
       technology_id: [null, Validators.required],
-      element_id: [null, Validators.required],
+      category_id: [null, Validators.required],
+      model_id: [null, Validators.required],
       model_name: ['', Validators.required],
       summary: [''],
       tag_ids: [[]],
@@ -55,13 +59,19 @@ export class ArticleCreateWizardComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadTechnologies();
+    this.loadModels();
     this.loadOptions();
     this.loadTags();
     this.loadTemplates();
     
-    // Подписываемся на изменения технологии для фильтрации элементов
+    // Подписываемся на изменения технологии для фильтрации категорий
     this.articleForm.get('technology_id')?.valueChanges.subscribe(techId => {
       this.onTechnologyChange(techId);
+    });
+    
+    // Подписываемся на изменения категории для фильтрации моделей
+    this.articleForm.get('category_id')?.valueChanges.subscribe(categoryId => {
+      this.onCategoryChange(categoryId);
     });
   }
 
@@ -76,22 +86,55 @@ export class ArticleCreateWizardComponent implements OnInit {
     });
   }
 
+  loadModels(): void {
+    this.articleService.getModels().subscribe({
+      next: (models) => {
+        this.allModels = Array.isArray(models) ? models : [];
+      },
+      error: () => {
+        this.allModels = [];
+      }
+    });
+  }
+
   onTechnologyChange(techId: string | null): void {
     if (!techId) {
       this.selectedTechnology = null;
-      this.availableElements = [];
-      this.articleForm.patchValue({ element_id: null });
+      this.availableCategories = [];
+      this.availableModels = [];
+      this.articleForm.patchValue({ category_id: null });
+      this.articleForm.patchValue({ model_id: null });
       return;
     }
     
     const technology = this.technologies.find(t => t.id === techId);
     if (technology) {
       this.selectedTechnology = technology;
-      this.availableElements = technology.elements || [];
+      this.availableCategories = technology.categories || [];
     } else {
       this.selectedTechnology = null;
-      this.availableElements = [];
+      this.availableCategories = [];
     }
+    // Сбрасываем категорию и элемент при смене технологии
+    this.articleForm.patchValue({ category_id: null });
+    this.articleForm.patchValue({ model_id: null });
+    this.availableModels = [];
+  }
+
+  onCategoryChange(categoryId: string | null): void {
+    if (!categoryId) {
+      this.selectedCategory = null;
+      this.availableModels = [];
+      this.articleForm.patchValue({ model_id: null });
+      return;
+    }
+    
+    // Фильтруем модели по выбранной категории
+    this.availableModels = this.allModels.filter(m => m.category?.id === categoryId);
+    this.selectedCategory = this.availableCategories.find(c => c.id === categoryId) || null;
+    
+    // Сбрасываем элемент при смене категории
+    this.articleForm.patchValue({ model_id: null });
   }
 
   loadOptions(): void {
@@ -258,7 +301,12 @@ export class ArticleCreateWizardComponent implements OnInit {
         return;
       }
     } else if (this.currentStep === 2) {
-      if (!this.articleForm.get('element_id')?.value) {
+      if (!this.articleForm.get('category_id')?.value) {
+        this.error = 'Выберите категорию';
+        return;
+      }
+    } else if (this.currentStep === 3) {
+      if (!this.articleForm.get('model_id')?.value) {
         this.error = 'Выберите элемент';
         return;
       }
@@ -300,7 +348,7 @@ export class ArticleCreateWizardComponent implements OnInit {
     const articleData: any = {
       model_name: formValue.model_name,
       summary: formValue.summary || '',
-      element_id: formValue.element_id,
+      model_id: formValue.model_id,
       content: content,
       tag_ids: this.selectedTags.map(t => t.id).filter(id => id !== undefined),
       option_values_data: this.optionValuesList

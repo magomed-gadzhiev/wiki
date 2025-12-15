@@ -1,11 +1,12 @@
 import { Component, Input, OnInit, AfterViewInit, OnDestroy, OnChanges, SimpleChanges, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TableOfContentsItem } from '../../core/models/article.model';
 
 interface TocItem {
   id: string;
   text: string;
   level: number;
-  element: HTMLElement;
+  element: HTMLElement | null;
 }
 
 @Component({
@@ -18,6 +19,7 @@ interface TocItem {
 export class ArticleTocComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges {
   @Input() contentElement!: HTMLElement;
   @Input() commentsElementId: string = 'article-comments';
+  @Input() tableOfContents: TableOfContentsItem[] = [];
   
   tocItems: TocItem[] = [];
   activeItemId: string | null = null;
@@ -30,36 +32,42 @@ export class ArticleTocComponent implements OnInit, AfterViewInit, OnDestroy, On
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['tableOfContents']) {
+      if (this.tableOfContents && this.tableOfContents.length > 0) {
+        this.initializeTocFromBackend();
+        // Если contentElement уже есть, сразу связываем элементы
+        if (this.contentElement) {
+          setTimeout(() => {
+            this.linkTocItemsToElements();
+            this.setupIntersectionObserver();
+          }, 300);
+        }
+      } else {
+        this.tocItems = [];
+      }
+    }
     if (changes['contentElement'] && this.contentElement) {
-      // Даем время на рендеринг контента
-      setTimeout(() => {
-        this.extractHeadings();
-        this.setupIntersectionObserver();
-      }, 300);
+      // Если навигация уже инициализирована, связываем элементы
+      if (this.tocItems.length > 0) {
+        setTimeout(() => {
+          this.linkTocItemsToElements();
+          this.setupIntersectionObserver();
+        }, 300);
+      }
     }
   }
 
   ngAfterViewInit(): void {
-    if (this.contentElement) {
-      // Используем интервал для проверки готовности контента
-      this.checkInterval = setInterval(() => {
-        if (this.contentElement && this.contentElement.querySelectorAll('h1, h2, h3, h4, h5, h6').length > 0) {
-          this.extractHeadings();
-          this.setupIntersectionObserver();
-          if (this.checkInterval) {
-            clearInterval(this.checkInterval);
-            this.checkInterval = null;
-          }
-        }
-      }, 100);
-      
-      // Останавливаем проверку через 5 секунд
+    // Инициализируем навигацию, если данные уже есть
+    if (this.tableOfContents && this.tableOfContents.length > 0 && this.tocItems.length === 0) {
+      this.initializeTocFromBackend();
+    }
+    // Связываем элементы с DOM, если contentElement уже есть
+    if (this.contentElement && this.tocItems.length > 0) {
       setTimeout(() => {
-        if (this.checkInterval) {
-          clearInterval(this.checkInterval);
-          this.checkInterval = null;
-        }
-      }, 5000);
+        this.linkTocItemsToElements();
+        this.setupIntersectionObserver();
+      }, 300);
     }
   }
 
@@ -75,37 +83,49 @@ export class ArticleTocComponent implements OnInit, AfterViewInit, OnDestroy, On
     }
   }
 
-  extractHeadings(): void {
+  initializeTocFromBackend(): void {
+    // Инициализируем навигацию из данных с backend
+    if (!this.tableOfContents || this.tableOfContents.length === 0) {
+      this.tocItems = [];
+      return;
+    }
+
+    this.tocItems = this.tableOfContents.map(item => ({
+      id: item.id,
+      text: item.text,
+      level: item.level,
+      element: null as HTMLElement | null
+    }));
+
+    // Связываем элементы с DOM после рендеринга
+    if (this.contentElement) {
+      this.linkTocItemsToElements();
+    }
+  }
+
+  linkTocItemsToElements(): void {
+    // Связываем элементы навигации с реальными заголовками в DOM
     if (!this.contentElement) return;
 
-    const headings = this.contentElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
-    this.tocItems = [];
-
-    headings.forEach((heading, index) => {
-      const level = parseInt(heading.tagName.substring(1));
-      const text = heading.textContent?.trim() || '';
-      
-      if (text) {
-        // Создаем уникальный ID для заголовка
-        let id = `heading-${index}`;
-        const existingId = heading.id;
-        if (existingId) {
-          id = existingId;
-        } else {
-          heading.id = id;
+    this.tocItems.forEach(item => {
+      if (!item.element) {
+        const element = this.contentElement.querySelector(`#${item.id}`);
+        if (element) {
+          item.element = element as HTMLElement;
         }
-
-        this.tocItems.push({
-          id,
-          text,
-          level,
-          element: heading as HTMLElement
-        });
       }
     });
   }
 
   scrollToHeading(item: TocItem): void {
+    // Если элемент еще не связан, пытаемся найти его
+    if (!item.element && this.contentElement) {
+      const element = this.contentElement.querySelector(`#${item.id}`);
+      if (element) {
+        item.element = element as HTMLElement;
+      }
+    }
+
     if (item.element) {
       const elementTop = item.element.getBoundingClientRect().top + window.pageYOffset;
       const offset = 80; // Отступ сверху для фиксированной навигации
@@ -118,10 +138,14 @@ export class ArticleTocComponent implements OnInit, AfterViewInit, OnDestroy, On
       // Подсвечиваем активный элемент
       this.activeItemId = item.id;
       setTimeout(() => {
-        item.element.classList.add('toc-highlight');
-        setTimeout(() => {
-          item.element.classList.remove('toc-highlight');
-        }, 2000);
+        if (item.element) {
+          item.element.classList.add('toc-highlight');
+          setTimeout(() => {
+            if (item.element) {
+              item.element.classList.remove('toc-highlight');
+            }
+          }, 2000);
+        }
       }, 100);
     }
   }
@@ -183,6 +207,14 @@ export class ArticleTocComponent implements OnInit, AfterViewInit, OnDestroy, On
 
     // Проверяем заголовки
     this.tocItems.forEach(item => {
+      // Если элемент еще не связан, пытаемся найти его
+      if (!item.element && this.contentElement) {
+        const element = this.contentElement.querySelector(`#${item.id}`);
+        if (element) {
+          item.element = element as HTMLElement;
+        }
+      }
+
       if (item.element) {
         const elementTop = item.element.getBoundingClientRect().top + window.scrollY;
         const distance = Math.abs(elementTop - scrollPosition);

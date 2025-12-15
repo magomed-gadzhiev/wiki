@@ -4,7 +4,7 @@
   <form [formGroup]="articleForm" (ngSubmit)="onSubmit()">
     <div class="card">
       <div class="form-group">
-        <label for="model_name">Модель *</label>
+        <label for="model_name">Элемент *</label>
         <input 
           id="model_name" 
           type="text" 
@@ -12,7 +12,7 @@
           [class.error]="articleForm.get('model_name')?.invalid && articleForm.get('model_name')?.touched"
         />
         <div *ngIf="articleForm.get('model_name')?.invalid && articleForm.get('model_name')?.touched" class="error-message">
-          Модель обязательна
+          Элемент обязателен
         </div>
       </div>
       
@@ -26,21 +26,36 @@
       </div>
       
       <div class="form-group">
-        <label for="element_id">Элемент</label>
+        <label for="category">Категория</label>
         <select 
-          id="element_id" 
-          formControlName="element_id"
+          id="category" 
+          [(ngModel)]="selectedCategoryId"
+          (ngModelChange)="onCategoryChange($event)"
+          [ngModelOptions]="{standalone: true}"
         >
-          <option [ngValue]="null">-- Без элемента --</option>
-          <option *ngFor="let element of (availableElementsForCreation || []); trackBy: trackByElementId" [ngValue]="element.id">
-            {{ element.name }}
+          <option [ngValue]="null">-- Выберите категорию --</option>
+          <option *ngFor="let category of (categories || []); trackBy: trackByCategoryId" [ngValue]="category.id">
+            {{ category.name }}
           </option>
         </select>
-        <div *ngIf="elementSelectionError" class="error-message" style="margin-top: 5px;">
-          {{ elementSelectionError }}
+      </div>
+      
+      <div class="form-group">
+        <label for="model_id">Элемент</label>
+        <select 
+          id="model_id" 
+          formControlName="model_id"
+        >
+          <option [ngValue]="null">-- Выберите элемент --</option>
+          <option *ngFor="let model of (availableModelsForCreation || []); trackBy: trackByModelId" [ngValue]="model.id">
+            {{ model.name }}
+          </option>
+        </select>
+        <div *ngIf="modelSelectionError" class="error-message" style="margin-top: 5px;">
+          {{ modelSelectionError }}
         </div>
-        <div *ngIf="articleForm.get('element_id')?.value && !elementSelectionError" style="font-size: 12px; color: #666; margin-top: 5px;">
-          Текущее значение: {{ articleForm.get('element_id')?.value }}
+        <div *ngIf="articleForm.get('model_id')?.value && !modelSelectionError" style="font-size: 12px; color: #666; margin-top: 5px;">
+          Текущее значение: {{ articleForm.get('model_id')?.value }}
         </div>
       </div>
       
@@ -154,7 +169,11 @@
       
       <div class="form-group">
         <label for="content">Содержимое *</label>
-        <div #gjsEditor id="gjs-editor" style="min-height: 500px;"></div>
+        
+        <!-- GrapesJS редактор -->
+        <div>
+          <div #gjsEditor id="gjs-editor" style="min-height: 500px;"></div>
+        </div>
 
         <div *ngIf="articleForm.get('content')?.invalid && articleForm.get('content')?.touched" class="error-message">
           Содержимое обязательно
@@ -295,5 +314,6 @@
     (change)="onWordFileSelected($event)"
   />
   
+  <app-chart-config-dialog #chartConfigDialog></app-chart-config-dialog>
 </div>
 

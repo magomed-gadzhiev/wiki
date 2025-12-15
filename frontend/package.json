@@ -20,11 +20,17 @@
     "@angular/platform-browser": "^20.0.0",
     "@angular/platform-browser-dynamic": "^20.0.0",
     "@angular/router": "^20.0.0",
+    "@ckeditor/ckeditor5-angular": "^11.0.0",
+    "@ckeditor/ckeditor5-build-classic": "^41.4.2",
+    "@types/papaparse": "^5.5.1",
     "bootstrap": "^5.3.8",
     "grapesjs": "^0.22.13",
     "grapesjs-blocks-basic": "^1.0.2",
     "grapesjs-table": "^1.0.8",
+    "mermaid": "^11.12.2",
     "ngx-quill": "^30.0.0",
+    "papaparse": "^5.5.3",
+    "plotly.js-dist-min": "^2.35.2",
     "quill": "^2.0.3",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
@@ -35,6 +41,7 @@
     "@angular/cli": "^20.0.0",
     "@angular/compiler-cli": "^20.0.0",
     "@types/node": "^20.0.0",
+    "@types/plotly.js": "^2.12.29",
     "typescript": "~5.8.0"
   }
 }

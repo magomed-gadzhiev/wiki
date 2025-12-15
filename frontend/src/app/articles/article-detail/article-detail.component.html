@@ -3,6 +3,7 @@
     <aside class="article-sidebar" *ngIf="contentElement">
       <app-article-toc 
         [contentElement]="contentElement" 
+        [tableOfContents]="article.table_of_contents || []"
         commentsElementId="article-comments">
       </app-article-toc>
     </aside>
@@ -11,11 +12,14 @@
       <div class="col-12 article-main">
         <div class="article-header">
           <h1>
-            <span *ngIf="article.element?.technology">
-              <a [routerLink]="['/technologies', article.element?.technology?.id]" class="hierarchy-link">{{ article.element?.technology?.name }}</a> / 
+            <span *ngIf="article.model?.category?.technology">
+              <a [routerLink]="['/technologies', article.model?.category?.technology?.id]" class="hierarchy-link">{{ article.model?.category?.technology?.name }}</a> / 
             </span>
-            <span *ngIf="article.element">
-              <a [routerLink]="['/elements', article.element.id]" class="hierarchy-link">{{ article.element.name }}</a> / 
+            <span *ngIf="article.model?.category">
+              <a [routerLink]="['/categories', article.model?.category?.id]" class="hierarchy-link">{{ article.model?.category?.name }}</a> / 
+            </span>
+            <span *ngIf="article.model">
+              <a [routerLink]="['/models', article.model.id]" class="hierarchy-link">{{ article.model.name }}</a> / 
             </span>
             <span>{{ article.model_name }}</span>
           </h1>
@@ -31,7 +35,7 @@
         
         <div class="article-meta">
           <span>Автор: {{ article.author.username }}</span>
-          <span *ngIf="article.element">Элемент: {{ article.element.name }}</span>
+          <span *ngIf="article.model">Элемент: {{ article.model.name }}</span>
           <span>Создано: {{ article.created_at | date:'dd.MM.yyyy, HH:mm' }}</span>
           <span>Обновлено: {{ article.updated_at | date:'dd.MM.yyyy, HH:mm' }}</span>
           <span>Просмотров: {{ article.view_count }}</span>

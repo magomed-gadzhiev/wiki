@@ -7,9 +7,10 @@ export interface TechnologySimple {
   created_at: string;
 }
 
-export interface ElementSimple {
+export interface CategorySimple {
   id: string;
   name: string;
+  technology?: TechnologySimple | null;
   sort_order: number;
   created_at: string;
 }
@@ -19,13 +20,37 @@ export interface Technology {
   name: string;
   sort_order: number;
   created_at: string;
-  elements: ElementSimple[];
+  categories: CategorySimple[];
 }
 
-export interface Element {
+export interface ModelSimpleForCategory {
+  id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface Category {
   id: string;
   name: string;
   technology?: TechnologySimple | null;
+  models?: ModelSimpleForCategory[];
+  sort_order: number;
+  created_at: string;
+}
+
+export interface ModelSimple {
+  id: string;
+  name: string;
+  category?: CategorySimple | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface Model {
+  id: string;
+  name: string;
+  category?: CategorySimple | null;
   sort_order: number;
   created_at: string;
 }
@@ -37,12 +62,18 @@ export interface Tag {
   created_at?: string;
 }
 
+export interface TableOfContentsItem {
+  id: string;
+  text: string;
+  level: number;
+}
+
 export interface Article {
   id: string;
   model_name: string;
   content: string;
   summary: string;
-  element?: Element | null;
+  model?: ModelSimple | null;
   tags: Tag[];
   author: User;
   created_at: string;
@@ -57,6 +88,7 @@ export interface Article {
   option_values: ArticleOptionValue[];
   versions_count: number;
   latest_version?: ArticleVersion;
+  table_of_contents?: TableOfContentsItem[];
 }
 
 export interface ArticleVersion {

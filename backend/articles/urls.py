@@ -1,11 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ArticleViewSet, ArticleVersionViewSet, ArticleImageViewSet, ElementViewSet, TechnologyViewSet, TagViewSet, ArticleOptionViewSet, GroupViewSet, ArticleTemplateViewSet, CommentViewSet
+from .views import ArticleViewSet, ArticleVersionViewSet, ArticleImageViewSet, CategoryViewSet, ModelViewSet, TechnologyViewSet, TagViewSet, ArticleOptionViewSet, GroupViewSet, ArticleTemplateViewSet, CommentViewSet
 
 router = DefaultRouter()
 # Регистрируем специфичные роуты ПЕРЕД общим роутом статей
 router.register(r'technologies', TechnologyViewSet, basename='technology')
-router.register(r'elements', ElementViewSet, basename='element')
+router.register(r'categories', CategoryViewSet, basename='category')
+router.register(r'models', ModelViewSet, basename='model')
 router.register(r'tags', TagViewSet, basename='tag')
 router.register(r'options', ArticleOptionViewSet, basename='article-option')
 router.register(r'templates', ArticleTemplateViewSet, basename='article-template')

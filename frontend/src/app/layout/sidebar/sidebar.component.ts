@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { ArticleService } from '../../core/services/article.service';
 import { AuthService } from '../../core/services/auth.service';
-import { Technology, Element } from '../../core/models/article.model';
+import { Technology, Category } from '../../core/models/article.model';
 
 @Component({
   selector: 'app-sidebar',
@@ -14,9 +14,9 @@ import { Technology, Element } from '../../core/models/article.model';
 })
 export class SidebarComponent implements OnInit {
   technologies: Technology[] = [];
-  elementsWithoutTechnology: Element[] = [];
+  categoriesWithoutTechnology: Category[] = [];
   expandedTechnologies: Set<string> = new Set();
-  currentElementId: string | null = null;
+  currentCategoryId: string | null = null;
 
   constructor(
     private articleService: ArticleService,
@@ -38,12 +38,12 @@ export class SidebarComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Загружаем элементы только если пользователь авторизован
+    // Загружаем категории только если пользователь авторизован
     if (this.isAuthenticated()) {
       this.loadTechnologies();
-      this.loadElementsWithoutTechnology();
+      this.loadCategoriesWithoutTechnology();
     }
-    this.checkCurrentElement();
+    this.checkCurrentCategory();
   }
 
   loadTechnologies(): void {
@@ -54,27 +54,34 @@ export class SidebarComponent implements OnInit {
     
     this.articleService.getTechnologies().subscribe({
       next: (technologies) => {
-        this.technologies = technologies;
+        this.technologies = technologies || [];
+        // Убеждаемся, что у каждой технологии есть массив categories
+        this.technologies.forEach(tech => {
+          if (!tech.categories) {
+            tech.categories = [];
+          }
+        });
         // По умолчанию все dropdown свернуты
       },
-      error: () => {
-        // Ошибка загрузки технологий
+      error: (err) => {
+        console.error('Ошибка загрузки технологий:', err);
+        this.technologies = [];
       }
     });
   }
 
-  loadElementsWithoutTechnology(): void {
-    // Загружаем элементы только если пользователь авторизован
+  loadCategoriesWithoutTechnology(): void {
+    // Загружаем категории только если пользователь авторизован
     if (!this.isAuthenticated()) {
       return;
     }
     
-    this.articleService.getElements().subscribe({
-      next: (elements) => {
-        // Фильтруем элементы без технологии
-        this.elementsWithoutTechnology = elements.filter(el => !el.technology);
+    this.articleService.getCategories().subscribe({
+      next: (categories) => {
+        // Фильтруем категории без технологии
+        this.categoriesWithoutTechnology = categories.filter(cat => !cat.technology);
         // Сортируем по sort_order и name
-        this.elementsWithoutTechnology.sort((a, b) => {
+        this.categoriesWithoutTechnology.sort((a, b) => {
           if (a.sort_order !== b.sort_order) {
             return a.sort_order - b.sort_order;
           }
@@ -82,29 +89,29 @@ export class SidebarComponent implements OnInit {
         });
       },
       error: () => {
-        // Ошибка загрузки элементов без технологии
+        // Ошибка загрузки категорий без технологии
       }
     });
   }
 
-  checkCurrentElement(): void {
-    // Проверяем текущий элемент при инициализации
-    this.updateCurrentElement();
+  checkCurrentCategory(): void {
+    // Проверяем текущую категорию при инициализации
+    this.updateCurrentCategory();
     
     // Подписываемся на изменения маршрута
     this.router.events.subscribe(() => {
-      this.updateCurrentElement();
+      this.updateCurrentCategory();
     });
   }
 
-  updateCurrentElement(): void {
+  updateCurrentCategory(): void {
     const url = this.router.url;
-    const match = url.match(/\/elements\/([^\/]+)/);
+    const match = url.match(/\/categories\/([^\/]+)/);
     if (match) {
-      this.currentElementId = match[1];
+      this.currentCategoryId = match[1];
       // По умолчанию dropdown свернуты, не раскрываем автоматически
     } else {
-      this.currentElementId = null;
+      this.currentCategoryId = null;
     }
   }
 
@@ -120,8 +127,8 @@ export class SidebarComponent implements OnInit {
     return this.expandedTechnologies.has(technologyId);
   }
 
-  isElementActive(elementId: string): boolean {
-    return this.currentElementId === elementId;
+  isCategoryActive(categoryId: string): boolean {
+    return this.currentCategoryId === categoryId;
   }
 
   isActiveRoute(route: string): boolean {
@@ -129,7 +136,7 @@ export class SidebarComponent implements OnInit {
   }
 
   closeDropdown(technologyId: string): void {
-    // Закрываем dropdown после выбора элемента
+    // Закрываем dropdown после выбора категории
     this.expandedTechnologies.delete(technologyId);
   }
 }

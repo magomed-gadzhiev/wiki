@@ -1,0 +1,59 @@
+.chart-viewer-container {
+  width: 100%;
+  margin: 20px 0;
+  
+  .chart-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    height: 500px;
+    max-height: 500px;
+    min-height: 400px;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin: 0 auto;
+    
+    .chart-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e9ecef;
+      
+      .btn {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.75rem;
+      }
+      
+      .chart-hints {
+        color: #6c757d;
+        font-size: 0.75rem;
+      }
+    }
+    
+    .plotly-chart {
+      width: 100% !important;
+      max-width: 100%;
+      height: calc(100% - 50px) !important;
+      max-height: calc(100% - 50px) !important;
+    }
+  }
+  
+  .chart-error {
+    padding: 20px;
+    text-align: center;
+    color: #6c757d;
+    background-color: #f8f9fa;
+    border: 1px dashed #dee2e6;
+    border-radius: 4px;
+    
+    p {
+      margin: 0;
+    }
+  }
+}
+

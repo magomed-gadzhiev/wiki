@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { ArticleService } from '../../core/services/article.service';
-import { Technology, Element, Article } from '../../core/models/article.model';
+import { Technology, Category, Article } from '../../core/models/article.model';
 import { forkJoin, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 
@@ -52,26 +52,59 @@ export class TechnologyArticlesComponent implements OnInit {
   }
 
   loadArticles(): void {
-    if (!this.technology || !this.technology.elements || this.technology.elements.length === 0) {
+    if (!this.technology || !this.technology.categories || this.technology.categories.length === 0) {
       this.articles = [];
       return;
     }
 
     this.loadingArticles = true;
     
-    // Загружаем статьи для всех элементов технологии параллельно
-    const articleRequests = this.technology.elements.map(element =>
-      this.articleService.getArticles({ element: element.id }).pipe(
-        map(response => response.results),
+    // Загружаем статьи для всех категорий технологии через модели
+    // Получаем модели для каждой категории параллельно
+    const categoryIds = this.technology.categories.map(c => c.id);
+    const modelRequests = categoryIds.map(categoryId =>
+      this.articleService.getModels({ category: categoryId }).pipe(
+        map(models => models),
         catchError(() => of([]))
       )
     );
 
-    forkJoin(articleRequests).subscribe({
-      next: (articlesArrays) => {
-        // Объединяем все статьи в один массив
-        this.articles = articlesArrays.flat();
-        this.loadingArticles = false;
+    if (modelRequests.length === 0) {
+      this.articles = [];
+      this.loadingArticles = false;
+      return;
+    }
+
+    forkJoin(modelRequests).subscribe({
+      next: (modelsArrays) => {
+        // Объединяем все модели в один массив
+        const allModels = modelsArrays.flat();
+        
+        if (allModels.length === 0) {
+          this.articles = [];
+          this.loadingArticles = false;
+          return;
+        }
+        
+        // Загружаем статьи для всех моделей параллельно
+        const articleRequests = allModels.map(model =>
+          this.articleService.getArticles({ model: model.id }).pipe(
+            map(response => response.results),
+            catchError(() => of([]))
+          )
+        );
+
+        forkJoin(articleRequests).subscribe({
+          next: (articlesArrays) => {
+            // Объединяем все статьи в один массив
+            this.articles = articlesArrays.flat();
+            this.loadingArticles = false;
+          },
+          error: () => {
+            this.loadingArticles = false;
+            this.articles = [];
+          }
+        });
       },
       error: () => {
         this.loadingArticles = false;

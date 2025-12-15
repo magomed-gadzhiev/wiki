@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { RouterOutlet, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { SidebarComponent } from './layout/sidebar/sidebar.component';
+import { BreadcrumbsComponent } from './layout/breadcrumbs/breadcrumbs.component';
 import { AuthService } from './core/services/auth.service';
 import { catchError } from 'rxjs/operators';
 import { of } from 'rxjs';
@@ -9,7 +10,7 @@ import { of } from 'rxjs';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, SidebarComponent],
+  imports: [CommonModule, RouterOutlet, SidebarComponent, BreadcrumbsComponent],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']
 })

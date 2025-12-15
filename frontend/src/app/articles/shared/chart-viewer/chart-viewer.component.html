@@ -1,0 +1,17 @@
+<div class="chart-viewer-container">
+  <div class="chart-wrapper" *ngIf="config && config.series && config.series.length > 0">
+    <div class="chart-controls">
+      <button type="button" class="btn btn-sm btn-secondary" (click)="resetZoom()" title="Сбросить масштаб">
+        🔍 Сбросить масштаб
+      </button>
+      <div class="chart-hints">
+        <small>Колесо мыши: масштаб | Перетаскивание: перемещение</small>
+      </div>
+    </div>
+    <div #chartDiv class="plotly-chart"></div>
+  </div>
+  <div class="chart-error" *ngIf="!config || !config.series || config.series.length === 0">
+    <p>График не настроен или данные отсутствуют</p>
+  </div>
+</div>
+

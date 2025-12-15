@@ -44,9 +44,6 @@
         <button *ngIf="canComment()" class="btn btn-sm btn-link reference-btn" (click)="referenceComment(comment)">
           Сослаться
         </button>
-        <button *ngIf="isCommentAuthor(comment)" class="btn btn-sm btn-danger" (click)="deleteComment(comment)">
-          Удалить
-        </button>
       </div>
       
       <!-- Ссылки на другие комментарии -->
@@ -59,8 +56,8 @@
       
       <div class="comment-content" [innerHTML]="sanitizeHtml(processCommentContent(comment.content))"></div>
       
-      <!-- Кнопка ответа -->
-      <button *ngIf="canComment()" class="btn btn-sm btn-link reply-btn" (click)="startReply(comment)">
+      <!-- Кнопка ответа - только для комментариев верхнего уровня -->
+      <button *ngIf="canComment() && !comment.parent" class="btn btn-sm btn-link reply-btn" (click)="startReply(comment)">
         Ответить
       </button>
       
@@ -99,9 +96,6 @@
             <button *ngIf="canComment()" class="btn btn-sm btn-link reference-btn" (click)="referenceComment(reply)">
               Сослаться
             </button>
-            <button *ngIf="isCommentAuthor(reply)" class="btn btn-sm btn-danger" (click)="deleteComment(reply)">
-              Удалить
-            </button>
           </div>
           
           <!-- Ссылки на другие комментарии в ответе -->
@@ -113,10 +107,6 @@
           </div>
           
           <div class="comment-content" [innerHTML]="sanitizeHtml(processCommentContent(reply.content))"></div>
-          
-          <button *ngIf="canComment()" class="btn btn-sm btn-link reply-btn" (click)="startReply(reply)">
-            Ответить
-          </button>
         </div>
       </div>
     </div>
