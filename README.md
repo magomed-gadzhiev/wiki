@@ -20,7 +20,23 @@
 
 ## Установка и запуск
 
-### Backend
+### Вариант 1: Docker Compose (рекомендуется)
+
+Самый простой способ запуска проекта:
+
+```bash
+# Development режим
+docker-compose up -d
+
+# Production режим
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+Подробная документация по Docker: [DOCKER.md](./DOCKER.md)
+
+### Вариант 2: Локальная установка
+
+#### Backend
 
 ```bash
 cd backend
@@ -32,7 +48,7 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-### Frontend
+#### Frontend
 
 ```bash
 cd frontend
@@ -74,6 +90,7 @@ wiki/
 ## Документация
 
 - [Инструкция по установке](./INSTALLATION.md)
+- [Docker и Docker Compose](./DOCKER.md)
 - [Итоговое описание проекта](./PROJECT_SUMMARY.md)
 - [Требования к функционалу](./docs/requirements/)
 - [API документация](./docs/api/api.md)
