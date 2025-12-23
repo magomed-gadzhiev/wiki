@@ -5,6 +5,8 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     pandoc \
     netcat-openbsd \
+    krb5-user \
+    libkrb5-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Установка рабочей директории

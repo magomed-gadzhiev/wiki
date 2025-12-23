@@ -45,6 +45,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'users.kerberos_middleware.KerberosAuthenticationMiddleware',  # Kerberos аутентификация
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -139,6 +140,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
+
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'users.kerberos_auth.KerberosBackend',  # Kerberos аутентификация
+    'django.contrib.auth.backends.ModelBackend',  # Стандартная аутентификация по username/password
+]
+
+# Kerberos settings
+KRB5_REALM = os.getenv('KRB5_REALM', 'EXAMPLE.COM')
+KRB5_SERVICE = os.getenv('KRB5_SERVICE', 'HTTP')
 
 # REST Framework settings
 REST_FRAMEWORK = {

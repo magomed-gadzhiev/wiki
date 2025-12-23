@@ -1,7 +1,8 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { tap, catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
 import { User } from '../models/user.model';
 
 export interface LoginResponse {
@@ -120,6 +121,24 @@ export class AuthService {
         // Ошибка загрузки пользователя из хранилища
       }
     }
+  }
+
+  checkKerberos(): Observable<LoginResponse | null> {
+    /**
+     * Проверка наличия Kerberos аутентификации
+     * Возвращает LoginResponse если Kerberos работает, иначе null
+     */
+    return this.http.get<LoginResponse>(`${this.apiUrl}/kerberos-check/`).pipe(
+      tap(response => {
+        if (response && response.user) {
+          this.setUser(response.user, response.tokens);
+        }
+      }),
+      catchError(() => {
+        // Если Kerberos недоступен, возвращаем null (это нормально)
+        return of(null);
+      })
+    );
   }
 }
 

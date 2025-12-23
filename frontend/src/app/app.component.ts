@@ -28,25 +28,37 @@ export class AppComponent implements OnInit {
       return;
     }
     
-    // Если есть токен, проверяем его валидность
-    if (this.authService.getAccessToken()) {
-      this.authService.checkAuth().pipe(
-        catchError(() => {
-          // Если токен невалиден, очищаем и редиректим на логин
-          this.authService.logout();
-          this.router.navigate(['/login']);
-          return of(null);
-        })
-      ).subscribe(user => {
-        // Если требуется смена пароля и пользователь не на странице смены пароля, перенаправляем
-        if (user && user.must_change_password && !currentUrl.startsWith('/change-password')) {
+    // Сначала проверяем Kerberos SSO (если доступен)
+    this.authService.checkKerberos().subscribe(kerberosResponse => {
+      if (kerberosResponse && kerberosResponse.user) {
+        // Пользователь аутентифицирован через Kerberos
+        // Проверяем необходимость смены пароля
+        if (kerberosResponse.user.must_change_password && !currentUrl.startsWith('/change-password')) {
           this.router.navigate(['/change-password']);
         }
-      });
-    } else {
-      // Если нет токена, редиректим на логин
-      this.router.navigate(['/login']);
-    }
+        return; // Kerberos аутентификация успешна, выходим
+      }
+      
+      // Если Kerberos недоступен, проверяем стандартную аутентификацию
+      if (this.authService.getAccessToken()) {
+        this.authService.checkAuth().pipe(
+          catchError(() => {
+            // Если токен невалиден, очищаем и редиректим на логин
+            this.authService.logout();
+            this.router.navigate(['/login']);
+            return of(null);
+          })
+        ).subscribe(user => {
+          // Если требуется смена пароля и пользователь не на странице смены пароля, перенаправляем
+          if (user && user.must_change_password && !currentUrl.startsWith('/change-password')) {
+            this.router.navigate(['/change-password']);
+          }
+        });
+      } else {
+        // Если нет токена, редиректим на логин
+        this.router.navigate(['/login']);
+      }
+    });
   }
 }
 

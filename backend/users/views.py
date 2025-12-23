@@ -4,10 +4,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, login
 from django.db.models import Q
 from .serializers import UserSerializer
+import logging
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
@@ -166,4 +168,55 @@ def change_password(request):
         'message': 'Пароль успешно изменен',
         'user': UserSerializer(user).data
     })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def kerberos_check(request):
+    """
+    Проверка наличия Kerberos аутентификации
+    Возвращает информацию о пользователе, если Kerberos работает
+    """
+    # Проверяем REMOTE_USER заголовок (устанавливается nginx или другим прокси после Kerberos аутентификации)
+    remote_user = (
+        request.META.get('REMOTE_USER') or 
+        request.META.get('HTTP_REMOTE_USER') or
+        request.META.get('HTTP_X_REMOTE_USER')
+    )
+    
+    if remote_user:
+        logger.info(f'Kerberos check: found REMOTE_USER={remote_user}')
+        user = authenticate(request, remote_user=remote_user)
+        if user:
+            login(request, user)
+            refresh = RefreshToken.for_user(user)
+            logger.info(f'User {user.username} authenticated via Kerberos')
+            return Response({
+                'user': UserSerializer(user).data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                },
+                'kerberos': True
+            })
+        else:
+            logger.warning(f'Failed to authenticate user from REMOTE_USER: {remote_user}')
+    
+    # Если пользователь уже аутентифицирован через сессию, возвращаем его данные
+    if request.user.is_authenticated:
+        refresh = RefreshToken.for_user(request.user)
+        return Response({
+            'user': UserSerializer(request.user).data,
+            'tokens': {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            },
+            'kerberos': False,
+            'message': 'User authenticated via session'
+        })
+    
+    return Response({
+        'kerberos': False,
+        'message': 'Kerberos authentication not available. REMOTE_USER header not found.'
+    }, status=status.HTTP_401_UNAUTHORIZED)
 

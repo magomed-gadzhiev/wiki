@@ -39,3 +39,8 @@ Thumbs.db
 .env
 .env.local
 
+# Kerberos keytab files (contain secrets)
+*.keytab
+kerberos/*.keytab
+kerberos/http.keytab
+

@@ -15,6 +15,7 @@
 - [Требования к функционалу статей](./docs/requirements/articles.md)
 - [Требования к системе прав доступа](./docs/requirements/permissions.md)
 - [Требования к версионированию](./docs/requirements/versioning.md)
+- [Интеграция Kerberos SSO](./docs/requirements/kerberos-sso.md)
 - [API документация](./docs/api/api.md)
 
 ## Логика работы

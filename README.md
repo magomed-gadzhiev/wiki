@@ -17,6 +17,7 @@
 - ✅ Версионирование статей с возможностью восстановления
 - ✅ Django Admin для управления контентом
 - ✅ REST API для фронтенда
+- ✅ Kerberos SSO аутентификация с полноценной поддержкой SPNEGO через Apache
 
 ## Установка и запуск
 
@@ -63,6 +64,7 @@ ng serve
 - `POST /api/auth/login/` - Вход
 - `GET /api/auth/me/` - Текущий пользователь
 - `POST /api/auth/refresh/` - Обновление токена
+- `GET /api/auth/kerberos-check/` - Проверка Kerberos SSO аутентификации
 
 ### Статьи
 - `GET /api/articles/` - Список статей
@@ -93,5 +95,6 @@ wiki/
 - [Docker и Docker Compose](./DOCKER.md)
 - [Итоговое описание проекта](./PROJECT_SUMMARY.md)
 - [Требования к функционалу](./docs/requirements/)
+- [Интеграция Kerberos SSO](./docs/requirements/kerberos-sso.md)
 - [API документация](./docs/api/api.md)
 
