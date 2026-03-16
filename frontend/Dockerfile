@@ -6,8 +6,8 @@ WORKDIR /app
 # Копирование package файлов
 COPY package*.json ./
 
-# Установка зависимостей
-RUN npm ci
+# Установка зависимостей (npm install вместо npm ci из-за bundled deps CKEditor)
+RUN npm install
 
 # Копирование исходного кода
 COPY . .

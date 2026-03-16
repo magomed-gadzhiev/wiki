@@ -1,12 +1,13 @@
 FROM python:3.11-slim
 
-# Установка системных зависимостей
+# Установка системных зависимостей (build-essential для сборки gssapi из исходников)
 RUN apt-get update && apt-get install -y \
     postgresql-client \
     pandoc \
     netcat-openbsd \
     krb5-user \
     libkrb5-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Установка рабочей директории

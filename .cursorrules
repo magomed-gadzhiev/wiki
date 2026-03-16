@@ -6,6 +6,10 @@
 - Frontend: Angular v20
 - База данных: SQLite
 
+## Конфигурация API (Docker)
+- Frontend обращается к backend по домену srv-dkr-01 (src/app/core/config/environment.ts)
+- API base URL: http://srv-dkr-01:8005/api (порт из .env BACKEND_PORT)
+
 ## Документация
 - Требования по функционалу: `docs/requirements/`
 - API документация: `docs/api/`
