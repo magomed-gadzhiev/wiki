@@ -15,6 +15,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   backend:
     build:
@@ -43,6 +44,7 @@ services:
       db:
         condition: service_healthy
     command: python manage.py runserver 0.0.0.0:8000
+    restart: unless-stopped
 
   frontend:
     build:
@@ -59,6 +61,7 @@ services:
     depends_on:
       - backend
     command: npm start
+    restart: unless-stopped
 
   # kerberos:
   #   image: staticmukesh/kerberos-docker:latest

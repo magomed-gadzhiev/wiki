@@ -35,35 +35,29 @@ export class ArticleTocComponent implements OnInit, AfterViewInit, OnDestroy, On
     if (changes['tableOfContents']) {
       if (this.tableOfContents && this.tableOfContents.length > 0) {
         this.initializeTocFromBackend();
-        // Если contentElement уже есть, сразу связываем элементы
-        if (this.contentElement) {
-          setTimeout(() => {
-            this.linkTocItemsToElements();
-            this.setupIntersectionObserver();
-          }, 300);
-        }
       } else {
         this.tocItems = [];
       }
-    }
-    if (changes['contentElement'] && this.contentElement) {
-      // Если навигация уже инициализирована, связываем элементы
-      if (this.tocItems.length > 0) {
+      if (this.contentElement) {
         setTimeout(() => {
           this.linkTocItemsToElements();
           this.setupIntersectionObserver();
         }, 300);
       }
     }
+    if (changes['contentElement'] && this.contentElement) {
+      setTimeout(() => {
+        this.linkTocItemsToElements();
+        this.setupIntersectionObserver();
+      }, 300);
+    }
   }
 
   ngAfterViewInit(): void {
-    // Инициализируем навигацию, если данные уже есть
     if (this.tableOfContents && this.tableOfContents.length > 0 && this.tocItems.length === 0) {
       this.initializeTocFromBackend();
     }
-    // Связываем элементы с DOM, если contentElement уже есть
-    if (this.contentElement && this.tocItems.length > 0) {
+    if (this.contentElement) {
       setTimeout(() => {
         this.linkTocItemsToElements();
         this.setupIntersectionObserver();
@@ -193,7 +187,9 @@ export class ArticleTocComponent implements OnInit, AfterViewInit, OnDestroy, On
       this.observer.observe(commentsElement);
     }
 
-    // Добавляем обработчик скролла для более точного определения
+    if (this.scrollHandler) {
+      window.removeEventListener('scroll', this.scrollHandler);
+    }
     this.scrollHandler = () => {
       this.updateActiveItem();
     };

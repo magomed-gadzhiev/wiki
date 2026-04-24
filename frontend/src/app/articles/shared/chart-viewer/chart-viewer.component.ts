@@ -1,6 +1,7 @@
 import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as Plotly from 'plotly.js-dist-min';
+import { computeAxisLayout } from './chart-axis-helpers';
 
 export interface ChartDataPoint {
   x: number;
@@ -24,6 +25,10 @@ export interface ChartConfig {
   xMax?: number;
   yMin?: number;
   yMax?: number;
+  /** Логарифмическая шкала оси X (данные и ручные min/max должны быть > 0) */
+  xLog?: boolean;
+  /** Логарифмическая шкала оси Y (данные и ручные min/max должны быть > 0) */
+  yLog?: boolean;
 }
 
 @Component({
@@ -38,6 +43,8 @@ export class ChartViewerComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('chartDiv', { static: false }) chartDiv!: ElementRef<HTMLDivElement>;
   
   private plotlyInstance: any = null;
+  private allXValues: number[] = [];
+  private allYValues: number[] = [];
 
   ngOnInit(): void {
     // Проверяем наличие конфигурации
@@ -64,45 +71,17 @@ export class ChartViewerComponent implements OnInit, AfterViewInit, OnDestroy {
 
   resetZoom(): void {
     if (this.plotlyInstance && this.chartDiv) {
-      // Вычисляем диапазоны данных
-      const allXValues: number[] = [];
-      const allYValues: number[] = [];
-      
-      this.config.series.forEach(series => {
-        series.data.forEach(point => {
-          const x = typeof point.x === 'number' ? point.x : parseFloat(String(point.x));
-          const y = typeof point.y === 'number' ? point.y : parseFloat(String(point.y));
-          if (!isNaN(x) && !isNaN(y)) {
-            allXValues.push(x);
-            allYValues.push(y);
-          }
-        });
-      });
-
-      let xRange: number[] | undefined;
-      let yRange: number[] | undefined;
-
-      if (this.config.xMin !== undefined && this.config.xMax !== undefined) {
-        xRange = [this.config.xMin, this.config.xMax];
-      } else if (allXValues.length > 0) {
-        const xMin = Math.min(...allXValues);
-        const xMax = Math.max(...allXValues);
-        const xPadding = (xMax - xMin) * 0.05 || 1;
-        xRange = [xMin - xPadding, xMax + xPadding];
-      }
-
-      if (this.config.yMin !== undefined && this.config.yMax !== undefined) {
-        yRange = [this.config.yMin, this.config.yMax];
-      } else if (allYValues.length > 0) {
-        const yMin = Math.min(...allYValues);
-        const yMax = Math.max(...allYValues);
-        const yPadding = (yMax - yMin) * 0.05 || 1;
-        yRange = [yMin - yPadding, yMax + yPadding];
-      }
+      const { xRange, yRange, xAxisType, yAxisType } = computeAxisLayout(
+        this.config,
+        this.allXValues,
+        this.allYValues
+      );
 
       Plotly.relayout(this.chartDiv.nativeElement, {
+        'xaxis.type': xAxisType,
         'xaxis.range': xRange,
         'xaxis.autorange': xRange === undefined,
+        'yaxis.type': yAxisType,
         'yaxis.range': yRange,
         'yaxis.autorange': yRange === undefined
       });
@@ -120,16 +99,15 @@ export class ChartViewerComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Вычисляем диапазоны данных для центрирования
-    const allXValues: number[] = [];
-    const allYValues: number[] = [];
-    
+    this.allXValues = [];
+    this.allYValues = [];
     this.config.series.forEach(series => {
       series.data.forEach(point => {
         const x = typeof point.x === 'number' ? point.x : parseFloat(String(point.x));
         const y = typeof point.y === 'number' ? point.y : parseFloat(String(point.y));
         if (!isNaN(x) && !isNaN(y)) {
-          allXValues.push(x);
-          allYValues.push(y);
+          this.allXValues.push(x);
+          this.allYValues.push(y);
         }
       });
     });
@@ -181,27 +159,11 @@ export class ChartViewerComponent implements OnInit, AfterViewInit, OnDestroy {
       };
     });
 
-    // Определяем диапазоны осей
-    let xRange: number[] | undefined;
-    let yRange: number[] | undefined;
-    
-    if (this.config.xMin !== undefined && this.config.xMax !== undefined) {
-      xRange = [this.config.xMin, this.config.xMax];
-    } else if (allXValues.length > 0) {
-      const xMin = Math.min(...allXValues);
-      const xMax = Math.max(...allXValues);
-      const xPadding = (xMax - xMin) * 0.05 || 1; // 5% отступа или минимум 1
-      xRange = [xMin - xPadding, xMax + xPadding];
-    }
-    
-    if (this.config.yMin !== undefined && this.config.yMax !== undefined) {
-      yRange = [this.config.yMin, this.config.yMax];
-    } else if (allYValues.length > 0) {
-      const yMin = Math.min(...allYValues);
-      const yMax = Math.max(...allYValues);
-      const yPadding = (yMax - yMin) * 0.05 || 1; // 5% отступа или минимум 1
-      yRange = [yMin - yPadding, yMax + yPadding];
-    }
+    const { xRange, yRange, xAxisType, yAxisType } = computeAxisLayout(
+      this.config,
+      this.allXValues,
+      this.allYValues
+    );
 
     const layout: Partial<Plotly.Layout> = {
       title: this.config.title ? {
@@ -212,7 +174,7 @@ export class ChartViewerComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       } : undefined,
       xaxis: {
-        type: 'linear',
+        type: xAxisType,
         title: {
           text: this.config.xAxisLabel || 'X',
           font: {
@@ -227,7 +189,7 @@ export class ChartViewerComponent implements OnInit, AfterViewInit, OnDestroy {
         zeroline: false
       },
       yaxis: {
-        type: 'linear',
+        type: yAxisType,
         title: {
           text: this.config.yAxisLabel || 'Y',
           font: {
@@ -284,6 +246,103 @@ export class ChartViewerComponent implements OnInit, AfterViewInit, OnDestroy {
     } catch (error) {
       console.error('Error creating chart:', error);
     }
+  }
+
+  onXLogChange(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const prev = this.config?.xLog === true;
+    if (checked === prev) return;
+
+    const nextConfig: ChartConfig = {
+      ...this.config,
+      xLog: checked ? true : undefined,
+      yLog: this.config.yLog
+    };
+
+    const validation = this.validateLogConfig(nextConfig);
+    if (!validation.ok) {
+      (event.target as HTMLInputElement).checked = prev;
+      alert(validation.message || 'Некорректные данные для логарифмической шкалы.');
+      return;
+    }
+
+    this.config.xLog = checked ? true : undefined;
+    this.applyAxisLayout();
+  }
+
+  onYLogChange(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const prev = this.config?.yLog === true;
+    if (checked === prev) return;
+
+    const nextConfig: ChartConfig = {
+      ...this.config,
+      yLog: checked ? true : undefined,
+      xLog: this.config.xLog
+    };
+
+    const validation = this.validateLogConfig(nextConfig);
+    if (!validation.ok) {
+      (event.target as HTMLInputElement).checked = prev;
+      alert(validation.message || 'Некорректные данные для логарифмической шкалы.');
+      return;
+    }
+
+    this.config.yLog = checked ? true : undefined;
+    this.applyAxisLayout();
+  }
+
+  private applyAxisLayout(): void {
+    if (!this.plotlyInstance || !this.chartDiv) return;
+
+    const { xRange, yRange, xAxisType, yAxisType } = computeAxisLayout(
+      this.config,
+      this.allXValues,
+      this.allYValues
+    );
+
+    const relayoutUpdate: any = {
+      'xaxis.type': xAxisType,
+      'xaxis.autorange': xRange === undefined,
+      'yaxis.type': yAxisType,
+      'yaxis.autorange': yRange === undefined
+    };
+
+    if (xRange !== undefined) relayoutUpdate['xaxis.range'] = xRange;
+    if (yRange !== undefined) relayoutUpdate['yaxis.range'] = yRange;
+
+    Plotly.relayout(this.chartDiv.nativeElement, relayoutUpdate);
+  }
+
+  private validateLogConfig(nextConfig: ChartConfig): { ok: boolean; message?: string } {
+    const xLog = nextConfig.xLog === true;
+    const yLog = nextConfig.yLog === true;
+
+    if (xLog) {
+      if (this.allXValues.some((v) => v <= 0)) {
+        return { ok: false, message: 'Для логарифмической оси X все значения x должны быть больше 0.' };
+      }
+      if (nextConfig.xMin !== undefined && nextConfig.xMin <= 0) {
+        return { ok: false, message: 'Для логарифмической оси X минимум X должен быть больше 0.' };
+      }
+      if (nextConfig.xMax !== undefined && nextConfig.xMax <= 0) {
+        return { ok: false, message: 'Для логарифмической оси X максимум X должен быть больше 0.' };
+      }
+    }
+
+    if (yLog) {
+      if (this.allYValues.some((v) => v <= 0)) {
+        return { ok: false, message: 'Для логарифмической оси Y все значения y должны быть больше 0.' };
+      }
+      if (nextConfig.yMin !== undefined && nextConfig.yMin <= 0) {
+        return { ok: false, message: 'Для логарифмической оси Y минимум Y должен быть больше 0.' };
+      }
+      if (nextConfig.yMax !== undefined && nextConfig.yMax <= 0) {
+        return { ok: false, message: 'Для логарифмической оси Y максимум Y должен быть больше 0.' };
+      }
+    }
+
+    return { ok: true };
   }
 
   private getDashStyle(style: 'solid' | 'dashed' | 'dotted'): string {

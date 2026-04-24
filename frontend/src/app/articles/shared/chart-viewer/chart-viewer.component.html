@@ -4,6 +4,26 @@
       <button type="button" class="btn btn-sm btn-secondary" (click)="resetZoom()" title="Сбросить масштаб">
         🔍 Сбросить масштаб
       </button>
+      <div class="axis-log-controls">
+        <label class="form-check form-check-inline">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            [checked]="config.xLog === true"
+            (change)="onXLogChange($event)"
+          >
+          <span class="form-check-label">Лог X</span>
+        </label>
+        <label class="form-check form-check-inline">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            [checked]="config.yLog === true"
+            (change)="onYLogChange($event)"
+          >
+          <span class="form-check-label">Лог Y</span>
+        </label>
+      </div>
       <div class="chart-hints">
         <small>Колесо мыши: масштаб | Перетаскивание: перемещение</small>
       </div>

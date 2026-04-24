@@ -2981,7 +2981,7 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
         return;
       }
 
-      // Добавляем компоненты к существующему контенту как есть, без оберток
+      // Импорт: сервер оборачивает контент в div.wiki-word-import; вставляем как есть
       this.editor.addComponents(htmlMatch);
       
       // Обрабатываем стили (добавляем к существующим)

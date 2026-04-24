@@ -362,12 +362,16 @@ class ArticleViewSet(viewsets.ModelViewSet):
         if not user.is_superuser:
             # Обычные пользователи не видят удаленные статьи
             queryset = queryset.filter(is_deleted=False)
-        
-        # Фильтрация по правам доступа
-        # Права проверяются в ArticlePermission, здесь только базовая фильтрация
-        # Автор всегда видит свои статьи (проверка в permissions)
-        # Пользователи с read видят только опубликованные (проверка в permissions)
-        # Пользователи с edit видят все статьи (проверка в permissions)
+
+        # Список (list): object-level permission в DRF для list не применяется к queryset,
+        # поэтому для уровня read ограничиваем выборку здесь (опубликованные + свои черновики).
+        if user.is_authenticated and user.is_active and not user.is_superuser:
+            checker = ArticlePermission()
+            eff = checker._get_effective_system_permission(user)
+            if eff == 'read':
+                queryset = queryset.filter(Q(is_published=True) | Q(author=user))
+            elif eff == 'none':
+                queryset = queryset.none()
         
         # Поиск
         search = self.request.query_params.get('search', None)
@@ -551,7 +555,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         # Проверяем системные права через группы
         from .permissions import ArticlePermission
         permission_checker = ArticlePermission()
-        system_permission = permission_checker._get_system_permission_level(request.user)
+        system_permission = permission_checker._get_effective_system_permission(request.user)
         
         # Только пользователи с правами редактирования (edit) могут просматривать версии
         if system_permission == 'edit':
@@ -839,8 +843,8 @@ class ArticleVersionViewSet(viewsets.ReadOnlyModelViewSet):
         from .permissions import ArticlePermission
         permission_checker = ArticlePermission()
         
-        # Получаем системные права пользователя
-        system_permission = permission_checker._get_system_permission_level(user)
+        # Получаем итоговые системные права пользователя (группы + is_staff)
+        system_permission = permission_checker._get_effective_system_permission(user)
         
         # Только пользователи с правами редактирования (edit) имеют доступ к версиям
         if system_permission == 'edit':
@@ -1076,7 +1080,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         
         user = self.request.user
         if not user.is_superuser:
-            system_permission = permission_checker._get_system_permission_level(user)
+            system_permission = permission_checker._get_effective_system_permission(user)
             if system_permission not in ['read', 'edit']:
                 raise permissions.PermissionDenied('У вас нет прав на комментирование статей')
         

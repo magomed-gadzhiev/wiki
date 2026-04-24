@@ -1,6 +1,7 @@
 import { Component, OnInit, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { Subject, takeUntil } from 'rxjs';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ArticleService } from '../../core/services/article.service';
 import { Article } from '../../core/models/article.model';
@@ -9,6 +10,7 @@ import { ArticleCommentsComponent } from '../article-comments/article-comments.c
 import { ArticleTocComponent } from '../article-toc/article-toc.component';
 import * as Plotly from 'plotly.js-dist-min';
 import { ChartConfig } from '../shared/chart-viewer/chart-viewer.component';
+import { computeAxisLayout } from '../shared/chart-viewer/chart-axis-helpers';
 
 @Component({
   selector: 'app-article-detail',
@@ -26,6 +28,7 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
   sanitizedContent: SafeHtml = '';
   private styleElement: HTMLStyleElement | null = null;
   private chartInstances: HTMLElement[] = [];
+  private readonly destroy$ = new Subject<void>();
   contentElement: HTMLElement | null = null;
 
   constructor(
@@ -38,16 +41,17 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
   ) {}
 
   ngOnInit(): void {
-    const id = this.route.snapshot.paramMap.get('id');
-    if (id) {
-      this.loadArticle(id);
-    }
+    this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
+      const id = params.get('id');
+      if (id) {
+        this.loadArticle(id);
+      }
+    });
   }
 
   ngAfterViewInit(): void {
-    // Устанавливаем contentElement после инициализации представления
-    if (this.articleContent) {
-      this.contentElement = this.articleContent.nativeElement;
+    this.syncContentElementRef();
+    if (this.contentElement) {
       this.cdr.detectChanges();
     }
 
@@ -110,6 +114,12 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
     return this.article.can_edit.some(u => u.id === user.id);
   }
 
+  private syncContentElementRef(): void {
+    if (this.articleContent) {
+      this.contentElement = this.articleContent.nativeElement;
+    }
+  }
+
   loadArticle(id: string): void {
     this.loading = true;
     this.error = null;
@@ -119,19 +129,17 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
         this.article = article;
         this.processArticleContent(article.content);
         this.loading = false;
-        
-        // Обновляем contentElement после загрузки статьи
-        if (this.articleContent) {
-          this.contentElement = this.articleContent.nativeElement;
-          this.cdr.detectChanges();
-        } else {
-          // Если articleContent еще не готов, ждем немного
+
+        // ViewChild (#articleContent) внутри *ngIf="article" появляется только после
+        // отрисовки; без detectChanges() ссылка остаётся undefined — боковая навигация
+        // не монтируется (*ngIf="contentElement").
+        this.cdr.detectChanges();
+        this.syncContentElementRef();
+        if (!this.contentElement) {
           setTimeout(() => {
-            if (this.articleContent) {
-              this.contentElement = this.articleContent.nativeElement;
-              this.cdr.detectChanges();
-            }
-          }, 100);
+            this.syncContentElementRef();
+            this.cdr.detectChanges();
+          }, 0);
         }
         
         // Инициализируем графики после загрузки контента
@@ -211,6 +219,8 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     // Очищаем стили при уничтожении компонента
     this.removeArticleStyles();
     // Уничтожаем все графики
@@ -249,7 +259,10 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
         
         // Создаем панель управления
         const controlsDiv = document.createElement('div');
-        controlsDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;';
+        controlsDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;';
+        
+        const leftControlsDiv = document.createElement('div');
+        leftControlsDiv.style.cssText = 'display: flex; gap: 12px; align-items: center;';
         
         const resetButton = document.createElement('button');
         resetButton.type = 'button';
@@ -257,12 +270,35 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
         resetButton.textContent = '🔍 Сбросить масштаб';
         resetButton.style.cssText = 'font-size: 0.875rem; padding: 0.25rem 0.75rem;';
         resetButton.title = 'Сбросить масштаб';
+
+        const xLogCheckbox = document.createElement('input');
+        xLogCheckbox.type = 'checkbox';
+        xLogCheckbox.className = 'form-check-input';
+        xLogCheckbox.checked = config.xLog === true;
+        
+        const yLogCheckbox = document.createElement('input');
+        yLogCheckbox.type = 'checkbox';
+        yLogCheckbox.className = 'form-check-input';
+        yLogCheckbox.checked = config.yLog === true;
+
+        const xLogLabel = document.createElement('label');
+        xLogLabel.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #6c757d;';
+        xLogLabel.appendChild(xLogCheckbox);
+        xLogLabel.appendChild(document.createTextNode('Лог X'));
+        
+        const yLogLabel = document.createElement('label');
+        yLogLabel.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #6c757d;';
+        yLogLabel.appendChild(yLogCheckbox);
+        yLogLabel.appendChild(document.createTextNode('Лог Y'));
         
         const hintsDiv = document.createElement('div');
         hintsDiv.style.cssText = 'color: #6c757d; font-size: 0.75rem;';
         hintsDiv.textContent = 'Колесо мыши: масштаб | Перетаскивание: перемещение';
         
-        controlsDiv.appendChild(resetButton);
+        leftControlsDiv.appendChild(resetButton);
+        leftControlsDiv.appendChild(xLogLabel);
+        leftControlsDiv.appendChild(yLogLabel);
+        controlsDiv.appendChild(leftControlsDiv);
         controlsDiv.appendChild(hintsDiv);
         
         // Создаем div для Plotly графика
@@ -338,27 +374,11 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
           };
         });
 
-        // Определяем диапазоны осей
-        let xRange: number[] | undefined;
-        let yRange: number[] | undefined;
-        
-        if (config.xMin !== undefined && config.xMax !== undefined) {
-          xRange = [config.xMin, config.xMax];
-        } else if (allXValues.length > 0) {
-          const xMin = Math.min(...allXValues);
-          const xMax = Math.max(...allXValues);
-          const xPadding = (xMax - xMin) * 0.05 || 1; // 5% отступа или минимум 1
-          xRange = [xMin - xPadding, xMax + xPadding];
-        }
-        
-        if (config.yMin !== undefined && config.yMax !== undefined) {
-          yRange = [config.yMin, config.yMax];
-        } else if (allYValues.length > 0) {
-          const yMin = Math.min(...allYValues);
-          const yMax = Math.max(...allYValues);
-          const yPadding = (yMax - yMin) * 0.05 || 1; // 5% отступа или минимум 1
-          yRange = [yMin - yPadding, yMax + yPadding];
-        }
+        const { xRange, yRange, xAxisType, yAxisType } = computeAxisLayout(
+          config,
+          allXValues,
+          allYValues
+        );
 
         const layout: Partial<Plotly.Layout> = {
           title: config.title ? {
@@ -369,7 +389,7 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
             }
           } : undefined,
           xaxis: {
-            type: 'linear',
+            type: xAxisType,
             title: {
               text: config.xAxisLabel || 'X',
               font: {
@@ -384,7 +404,7 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
             zeroline: false
           },
           yaxis: {
-            type: 'linear',
+            type: yAxisType,
             title: {
               text: config.yAxisLabel || 'Y',
               font: {
@@ -438,13 +458,87 @@ export class ArticleDetailComponent implements OnInit, AfterViewInit, OnDestroy 
           this.chartInstances.push(chartDiv);
           
           // Настраиваем обработчик кнопки сброса zoom
-          resetButton.addEventListener('click', () => {
-            Plotly.relayout(chartDiv, {
-              'xaxis.range': xRange,
-              'xaxis.autorange': xRange === undefined,
-              'yaxis.range': yRange,
-              'yaxis.autorange': yRange === undefined
-            });
+          const resetZoom = () => {
+            const {
+              xRange: nextXRange,
+              yRange: nextYRange,
+              xAxisType: nextXAxisType,
+              yAxisType: nextYAxisType
+            } = computeAxisLayout(config, allXValues, allYValues);
+
+            const relayoutUpdate: any = {
+              'xaxis.type': nextXAxisType,
+              'xaxis.autorange': nextXRange === undefined,
+              'yaxis.type': nextYAxisType,
+              'yaxis.autorange': nextYRange === undefined
+            };
+
+            if (nextXRange !== undefined) relayoutUpdate['xaxis.range'] = nextXRange;
+            if (nextYRange !== undefined) relayoutUpdate['yaxis.range'] = nextYRange;
+
+            Plotly.relayout(chartDiv, relayoutUpdate);
+          };
+
+          resetButton.addEventListener('click', resetZoom);
+
+          const validateLogToggle = (nextXLog: boolean | undefined, nextYLog: boolean | undefined): string | null => {
+            if (nextXLog === true) {
+              if (allXValues.some((v) => v <= 0)) {
+                return 'Для логарифмической оси X все значения x должны быть больше 0.';
+              }
+              if (config.xMin !== undefined && config.xMin <= 0) {
+                return 'Для логарифмической оси X минимум X должен быть больше 0.';
+              }
+              if (config.xMax !== undefined && config.xMax <= 0) {
+                return 'Для логарифмической оси X максимум X должен быть больше 0.';
+              }
+            }
+
+            if (nextYLog === true) {
+              if (allYValues.some((v) => v <= 0)) {
+                return 'Для логарифмической оси Y все значения y должны быть больше 0.';
+              }
+              if (config.yMin !== undefined && config.yMin <= 0) {
+                return 'Для логарифмической оси Y минимум Y должен быть больше 0.';
+              }
+              if (config.yMax !== undefined && config.yMax <= 0) {
+                return 'Для логарифмической оси Y максимум Y должен быть больше 0.';
+              }
+            }
+
+            return null;
+          };
+
+          xLogCheckbox.addEventListener('change', () => {
+            const prevXLog = config.xLog === true;
+            const nextXLog = xLogCheckbox.checked ? true : undefined;
+            const error = validateLogToggle(nextXLog, config.yLog === true ? true : undefined);
+
+            if (error) {
+              alert(error);
+              xLogCheckbox.checked = prevXLog;
+              return;
+            }
+
+            config.xLog = nextXLog;
+            htmlContainer.setAttribute('data-chart-config', JSON.stringify(config));
+            resetZoom();
+          });
+
+          yLogCheckbox.addEventListener('change', () => {
+            const prevYLog = config.yLog === true;
+            const nextYLog = yLogCheckbox.checked ? true : undefined;
+            const error = validateLogToggle(config.xLog === true ? true : undefined, nextYLog);
+
+            if (error) {
+              alert(error);
+              yLogCheckbox.checked = prevYLog;
+              return;
+            }
+
+            config.yLog = nextYLog;
+            htmlContainer.setAttribute('data-chart-config', JSON.stringify(config));
+            resetZoom();
           });
         });
       } catch (error) {

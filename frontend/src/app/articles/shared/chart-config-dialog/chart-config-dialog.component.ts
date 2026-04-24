@@ -20,6 +20,12 @@ export class ChartConfigDialogComponent implements OnInit {
   chartConfig: ChartConfig | null = null;
   onSave: ((config: ChartConfig) => void) | null = null;
   onCancel: (() => void) | null = null;
+  /**
+   * Логарифмический режим осей настраивается во время просмотра графика.
+   * Диалог конфигурации их не показывает, но мы должны сохранить значения,
+   * если график уже был настроен ранее.
+   */
+  private axisLogState: { xLog?: boolean; yLog?: boolean } = {};
 
   // Предустановленные цвета для графиков
   readonly defaultColors = [
@@ -51,6 +57,10 @@ export class ChartConfigDialogComponent implements OnInit {
     
     if (existingConfig) {
       // Загружаем существующую конфигурацию
+      this.axisLogState = {
+        xLog: existingConfig.xLog === true ? true : undefined,
+        yLog: existingConfig.yLog === true ? true : undefined
+      };
       this.chartForm.patchValue({
         title: existingConfig.title || '',
         xAxisLabel: existingConfig.xAxisLabel || 'X',
@@ -80,6 +90,7 @@ export class ChartConfigDialogComponent implements OnInit {
       });
     } else {
       // Создаем новую конфигурацию
+      this.axisLogState = {};
       this.chartForm.reset({
         title: '',
         xAxisLabel: 'X',
@@ -210,6 +221,8 @@ export class ChartConfigDialogComponent implements OnInit {
     }
 
     const formValue = this.chartForm.value;
+    const xLog = this.axisLogState.xLog === true;
+    const yLog = this.axisLogState.yLog === true;
     const series: ChartSeries[] = [];
 
     formValue.series.forEach((seriesData: any, index: number) => {
@@ -224,6 +237,16 @@ export class ChartConfigDialogComponent implements OnInit {
         data.forEach((point, pointIndex) => {
           if (typeof point.x !== 'number' || typeof point.y !== 'number') {
             throw new Error(`Точка ${pointIndex + 1}: x и y должны быть числами`);
+          }
+          if (xLog && point.x <= 0) {
+            throw new Error(
+              `Точка ${pointIndex + 1}: для логарифмической оси X все значения x должны быть больше 0`
+            );
+          }
+          if (yLog && point.y <= 0) {
+            throw new Error(
+              `Точка ${pointIndex + 1}: для логарифмической оси Y все значения y должны быть больше 0`
+            );
           }
         });
 
@@ -240,14 +263,30 @@ export class ChartConfigDialogComponent implements OnInit {
       }
     });
 
+    const xMin = formValue.xMin ? parseFloat(formValue.xMin) : undefined;
+    const xMax = formValue.xMax ? parseFloat(formValue.xMax) : undefined;
+    const yMin = formValue.yMin ? parseFloat(formValue.yMin) : undefined;
+    const yMax = formValue.yMax ? parseFloat(formValue.yMax) : undefined;
+
+    if (xLog && xMin !== undefined && xMax !== undefined && (xMin <= 0 || xMax <= 0)) {
+      alert('Для логарифмической оси X минимум и максимум X должны быть больше 0.');
+      return;
+    }
+    if (yLog && yMin !== undefined && yMax !== undefined && (yMin <= 0 || yMax <= 0)) {
+      alert('Для логарифмической оси Y минимум и максимум Y должны быть больше 0.');
+      return;
+    }
+
     const config: ChartConfig = {
       title: formValue.title || undefined,
       xAxisLabel: formValue.xAxisLabel || 'X',
       yAxisLabel: formValue.yAxisLabel || 'Y',
-      xMin: formValue.xMin ? parseFloat(formValue.xMin) : undefined,
-      xMax: formValue.xMax ? parseFloat(formValue.xMax) : undefined,
-      yMin: formValue.yMin ? parseFloat(formValue.yMin) : undefined,
-      yMax: formValue.yMax ? parseFloat(formValue.yMax) : undefined,
+      xLog: xLog || undefined,
+      yLog: yLog || undefined,
+      xMin,
+      xMax,
+      yMin,
+      yMax,
       series: series
     };
 

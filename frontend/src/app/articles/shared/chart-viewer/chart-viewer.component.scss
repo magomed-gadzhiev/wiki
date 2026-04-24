@@ -33,6 +33,12 @@
         color: #6c757d;
         font-size: 0.75rem;
       }
+
+      .axis-log-controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
     }
     
     .plotly-chart {

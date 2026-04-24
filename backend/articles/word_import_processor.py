@@ -43,8 +43,37 @@ class WordImportProcessor:
         # Сохраняем цвета текста из CSS классов в inline стили
         self._preserve_text_colors(soup)
         
-        # Возвращаем контент без обертки в .container > .row > .col-12
+        self._wrap_import_content(soup)
+        
         return str(soup)
+    
+    def _wrap_import_content(self, soup):
+        """
+        Оборачивает импортированный контент в один корневой блок внутри body,
+        чтобы в редакторе и на странице статьи блок можно было выделять и стилизовать целиком.
+        """
+        body = soup.find('body')
+        if body:
+            wrapper = soup.new_tag('div', **{'class': 'wiki-word-import'})
+            for child in list(body.children):
+                wrapper.append(child.extract())
+            body.append(wrapper)
+            return
+        html_el = soup.find('html')
+        if html_el:
+            wrapper = soup.new_tag('div', **{'class': 'wiki-word-import'})
+            for child in list(html_el.children):
+                if getattr(child, 'name', None) == 'head':
+                    continue
+                wrapper.append(child.extract())
+            body_tag = soup.new_tag('body')
+            body_tag.append(wrapper)
+            html_el.append(body_tag)
+            return
+        wrapper = soup.new_tag('div', **{'class': 'wiki-word-import'})
+        for child in list(soup.contents):
+            wrapper.append(child.extract())
+        soup.append(wrapper)
     
     def _extract_and_preserve_styles(self, soup):
         """
