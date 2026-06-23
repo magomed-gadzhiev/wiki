@@ -728,6 +728,10 @@ export class ArticleEditorComponent implements OnInit, AfterViewInit, OnDestroy 
       this.editor = gjs.init({
         container: containerElement,
         height: '500px',
+        // По умолчанию GrapesJS подгружает иконки (Font Awesome) с внешнего CDN
+        // (cdnjs.cloudflare.com). Переопределяем на локальную копию, чтобы
+        // редактор не обращался к внешним ресурсам.
+        cssIcons: new URL('assets/font-awesome/css/font-awesome.min.css', document.baseURI).href,
         canvas: {
           styles: []
         },
